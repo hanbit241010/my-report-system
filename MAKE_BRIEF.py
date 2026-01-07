@@ -19,25 +19,25 @@ if 'selected_name' not in st.session_state:
 # 3. 스타일(CSS) 정의
 st.markdown("""
     <style>
-    /* [기본] 헤더/푸터/배포버튼 등 불필요한 요소 전멸시키기 */
+    /* [기본] 헤더/푸터/배포버튼/왕관 등 불필요한 요소 전멸시키기 */
     header[data-testid="stHeader"] { display: none !important; }
     footer { display: none !important; }
     .stDeployButton { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
-    .stAppDeployButton { display: none !important; } /* 왕관/로켓 버튼 숨김 */
+    .stAppDeployButton { display: none !important; } 
     
-    /* [폰트] 섹션 헤더(Expander Title) 대폭 확대 */
+    /* [폰트] 섹션 헤더(Expander Title) 확대 */
     .streamlit-expanderHeader p {
-        font-size: 2.5rem !important;
-        font-weight: 900 !important;
+        font-size: 2.0rem !important;
+        font-weight: 800 !important;
         color: #000 !important;
     }
     
     /* 타이틀 */
     .title-text {
-        text-align: center; font-size: 2.8rem; font-weight: 800;
+        text-align: center; font-size: 2.5rem; font-weight: 800;
         margin-bottom: 10px; color: #000;
     }
     
@@ -49,55 +49,45 @@ st.markdown("""
     .ticker-content { display: inline-block; animation: scroll 40s linear infinite; }
     .ticker-item { display: inline-block; padding: 0 2rem; font-size: 1.1rem; font-weight: bold; color: #333; }
     @keyframes scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-    
     .up { color: #d60000; } 
     .down { color: #0051c7; } 
 
-    /* [PC용] 리스트 버튼 스타일 */
-    div.stButton > button {
-        width: 100%; border: none; background-color: transparent;
-        color: #333; text-align: left; padding: 12px 2px;
-        font-size: 1.1rem; font-weight: 500; margin: 0;
-        line-height: 1.2;
-    }
-    div.stButton > button:hover { background-color: #f9f9f9; color: #d60000; }
-    div.stButton > button:focus { box-shadow: none; color: #d60000; }
-
-    /* [모바일 전용] HTML 테이블 스타일 */
-    .mobile-table {
+    /* [테이블 스타일] 모바일/PC 공용 */
+    .custom-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.85rem;
+        margin-top: 10px;
+        font-family: 'sans-serif';
+        font-size: 0.9rem;
     }
-    .mobile-table th {
+    .custom-table th {
+        border-bottom: 2px solid #333;
+        padding: 10px 5px;
         text-align: right;
-        padding: 8px 4px;
-        border-bottom: 2px solid #555;
         color: #333;
         font-weight: bold;
     }
-    .mobile-table td {
-        text-align: right;
-        padding: 12px 4px;
+    .custom-table td {
         border-bottom: 1px solid #eee;
+        padding: 12px 5px;
+        text-align: right;
         color: #333;
         font-weight: 500;
     }
-    .mobile-table td:first-child, .mobile-table th:first-child {
-        text-align: left; /* 종목명은 왼쪽 정렬 */
+    /* 첫 번째 컬럼(종목명)만 왼쪽 정렬 */
+    .custom-table th:first-child, .custom-table td:first-child {
+        text-align: left;
     }
-    
-    /* 반응형 처리 */
-    @media (max-width: 600px) {
-        .title-text { font-size: 2rem; }
-        .streamlit-expanderHeader p { font-size: 1.6rem !important; }
-        /* 모바일에서 PC용 컬럼 숨김 처리는 스트림릿 로직에서 해결 */
+    /* 선택된 행 하이라이트 */
+    .selected-row {
+        background-color: #f0f8ff;
+        font-weight: bold;
     }
-    
-    /* 암호화폐 카드 */
+
+    /* 암호화폐/뉴스 스타일 */
     .insight-box {
         background-color: #f8f9fa; border-radius: 10px; padding: 20px;
-        text-align: center; border: 1px solid #eee;
+        text-align: center; border: 1px solid #eee; margin-bottom: 10px;
     }
     .insight-label { font-size: 1rem; color: #666; margin-bottom: 5px; }
     .insight-value { font-size: 2rem; font-weight: bold; color: #333; }
@@ -106,9 +96,7 @@ st.markdown("""
     .news-card {
         background-color: white; padding: 15px; border-radius: 10px;
         border: 1px solid #eee; margin-bottom: 10px; height: 100%;
-        transition: transform 0.2s;
     }
-    .news-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     .news-title { font-weight: bold; font-size: 1rem; margin-bottom: 5px; color: #333; text-decoration: none; display: block; }
     .news-date { font-size: 0.85rem; color: #888; }
     </style>
@@ -122,14 +110,13 @@ date_part = now.strftime("%Y. %m. %d")
 week_num = now.isocalendar()[1] 
 today_str = f"{date_part} (Week {week_num:02d})"
 
-date_html = f"""
+st.markdown(f"""
 <div style="display: flex; justify-content: center; margin-bottom: 20px;">
     <div style="background-color: #333; color: white; padding: 8px 25px; border-radius: 20px; font-weight: bold; font-size: 1rem; box-shadow: 0 3px 6px rgba(0,0,0,0.2);">
         {today_str}
     </div>
 </div>
-"""
-st.markdown(date_html, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # 전광판 데이터 수집
 def get_ticker_html_data():
@@ -158,10 +145,7 @@ def get_ticker_html_data():
 with st.spinner("시장 데이터 동기화 중..."):
     live_ticker_items = get_ticker_html_data()
 
-ticker_html = f"""
-<div class="ticker-wrap"><div class="ticker-content">{live_ticker_items}</div></div>
-"""
-st.markdown(ticker_html, unsafe_allow_html=True)
+st.markdown(f"""<div class="ticker-wrap"><div class="ticker-content">{live_ticker_items}</div></div>""", unsafe_allow_html=True)
 
 # --- 함수 모음 ---
 def render_highchart_global(ticker, name, height=400):
@@ -174,16 +158,9 @@ def render_highchart_global(ticker, name, height=400):
             st.warning("차트 데이터 로딩 실패")
             return
         for idx, row in df.iterrows():
-            date_val = row.get('Date', row.name)
-            if not isinstance(date_val, pd.Timestamp): continue
-            ts = int(date_val.timestamp() * 1000)
-            op = float(row['Open']) if pd.notnull(row['Open']) else 0
-            hi = float(row['High']) if pd.notnull(row['High']) else 0
-            lo = float(row['Low']) if pd.notnull(row['Low']) else 0
-            cl = float(row['Close']) if pd.notnull(row['Close']) else 0
-            vo = int(row['Volume']) if pd.notnull(row['Volume']) else 0
-            ohlc.append([ts, op, hi, lo, cl])
-            volume.append([ts, vo])
+            ts = int(row['Date'].timestamp() * 1000)
+            ohlc.append([ts, row['Open'], row['High'], row['Low'], row['Close']])
+            volume.append([ts, row['Volume'] if pd.notnull(row['Volume']) else 0])
         ohlc_json = json.dumps(ohlc)
         vol_json = json.dumps(volume)
         html_code = f"""
@@ -288,22 +265,13 @@ market_items = [
 
 # 1. 국제 증시
 with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
-    # [1] 차트 선택 기능 (모바일/PC 공용 - Selectbox로 변경하여 공간 확보)
-    # 기존 버튼 리스트 대신 깔끔한 Dropdown 사용
+    # [1] 차트 선택
     options = [item["name"] for item in market_items]
     current_idx = options.index(st.session_state['selected_name']) if st.session_state['selected_name'] in options else 0
+    selected_option = st.selectbox("📊 차트 종목 선택", options, index=current_idx)
     
-    selected_option = st.selectbox(
-        "📊 차트 종목 선택 (Select Chart)", 
-        options, 
-        index=current_idx,
-        help="보고 싶은 차트를 선택하세요."
-    )
-    
-    # 선택 시 상태 업데이트
     if selected_option != st.session_state['selected_name']:
         st.session_state['selected_name'] = selected_option
-        # 티커 찾기
         for item in market_items:
             if item["name"] == selected_option:
                 st.session_state['selected_ticker'] = item['ticker']
@@ -312,12 +280,10 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     # [2] 차트 렌더링
     st.info(f"📈 현재 차트: **{st.session_state['selected_name']}**")
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
-    
     st.markdown("---")
     
-    # [3] 시세 리스트 (HTML 테이블로 렌더링 - 모바일 깨짐 방지 핵심)
-    # 데이터를 미리 수집
-    table_rows = ""
+    # [3] 시세 리스트 (HTML 표 깨짐 수정 완료)
+    html_rows = ""
     for item in market_items:
         price, rate, diff = 0, 0, 0
         try:
@@ -331,20 +297,14 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
-        bg_style = "background-color: #f0f8ff;" if st.session_state['selected_ticker'] == item['ticker'] else ""
+        row_class = "selected-row" if st.session_state['selected_ticker'] == item['ticker'] else ""
         
-        table_rows += f"""
-        <tr style="{bg_style}">
-            <td>{item['name']}</td>
-            <td>{price:,.2f}</td>
-            <td style="color: {color};">{sign}{rate:.2f}%</td>
-            <td style="color: {color};">{sign}{diff:,.2f}</td>
-        </tr>
-        """
-    
-    # HTML 테이블 생성
-    st.markdown(f"""
-    <table class="mobile-table">
+        # 여기서 f-string 안에 들여쓰기를 없애고 한 줄로 붙여야 HTML로 인식됩니다.
+        html_rows += f"<tr class='{row_class}'><td>{item['name']}</td><td>{price:,.2f}</td><td style='color:{color}'>{sign}{rate:.2f}%</td><td style='color:{color}'>{sign}{diff:,.2f}</td></tr>"
+
+    # 테이블 전체 HTML 조립
+    full_table_html = f"""
+    <table class="custom-table">
         <thead>
             <tr>
                 <th>종목명</th>
@@ -354,12 +314,12 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
             </tr>
         </thead>
         <tbody>
-            {table_rows}
+            {html_rows}
         </tbody>
     </table>
-    """, unsafe_allow_html=True)
+    """
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(full_table_html, unsafe_allow_html=True)
 
 
 # 2. 암호 화폐
