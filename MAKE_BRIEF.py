@@ -20,28 +20,18 @@ if 'selected_name' not in st.session_state:
 st.markdown("""
     <style>
     /* -------------------------------------------------------------------
-       [강력 숨김 모드] 
-       헤더, 푸터, 툴바, 매니지 버튼, 배포 버튼 등 모든 관리자 메뉴 제거 
+       [강력 숨김 모드] 관리자 메뉴 제거 
     ------------------------------------------------------------------- */
-    header[data-testid="stHeader"] { display: none !important; visibility: hidden !important; }
-    footer { display: none !important; visibility: hidden !important; }
-    
-    /* 우측 상단 햄버거 메뉴(...) 및 툴바 전체 숨김 */
-    [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
-    [data-testid="stHeader"] { display: none !important; }
-    
-    /* 우측 하단 Manage App 버튼 숨김 */
+    header[data-testid="stHeader"] { display: none !important; }
+    footer { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stManageAppButton"] { display: none !important; }
     .stAppDeployButton { display: none !important; }
     div[class*="stViewerBadge"] { display: none !important; }
-    
-    /* 기타 장식 요소 숨김 */
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
-    
-    /* ------------------------------------------------------------------- */
 
-    /* [폰트] 섹션 헤더(Expander Title) 확대 */
+    /* [폰트] 섹션 헤더 확대 */
     .streamlit-expanderHeader p {
         font-size: 2.0rem !important;
         font-weight: 800 !important;
@@ -65,36 +55,77 @@ st.markdown("""
     .up { color: #d60000; } 
     .down { color: #0051c7; } 
 
-    /* [테이블 스타일] */
-    .custom-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 10px;
-        font-family: 'sans-serif';
-        font-size: 0.9rem;
-    }
-    .custom-table th {
+    /* [리스트 헤더 스타일] */
+    .list-header {
+        font-weight: bold;
         border-bottom: 2px solid #333;
-        padding: 10px 5px;
-        text-align: right;
+        padding-bottom: 5px;
+        margin-bottom: 5px;
         color: #333;
-        font-weight: bold;
+        font-size: 1rem;
     }
-    .custom-table td {
-        border-bottom: 1px solid #eee;
-        padding: 12px 5px;
-        text-align: right;
+
+    /* [버튼 스타일 - 표처럼 보이게 위장] */
+    div.stButton > button {
+        width: 100%;
+        border: none;
+        background-color: transparent;
         color: #333;
-        font-weight: 500;
-    }
-    /* 첫 번째 컬럼(종목명)만 왼쪽 정렬 */
-    .custom-table th:first-child, .custom-table td:first-child {
         text-align: left;
+        padding: 0;
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        height: auto;
+        min-height: 0px;
+        line-height: 1.5;
     }
-    /* 선택된 행 하이라이트 */
-    .selected-row {
-        background-color: #e3f2fd; /* 선택된 항목 파란색 배경 */
-        font-weight: bold;
+    div.stButton > button:hover {
+        color: #d60000; /* 호버 시 빨간색 */
+        background-color: transparent;
+    }
+    div.stButton > button:focus {
+        box-shadow: none;
+        color: #d60000;
+    }
+    div.stButton > button:active {
+        color: #d60000;
+        background-color: transparent;
+    }
+
+    /* [데이터 셀 스타일] */
+    .data-text {
+        font-size: 1rem;
+        font-weight: 500;
+        color: #333;
+        text-align: right;
+        display: block;
+        margin-top: 5px; /* 버튼 높이와 맞추기 위함 */
+    }
+
+    /* [모바일 강제 가로 정렬 핵심 코드] */
+    @media (max-width: 600px) {
+        .title-text { font-size: 2rem; }
+        
+        /* 1. 컬럼이 세로로 쌓이는 것 방지 (가로 유지) */
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap !important;
+            min-width: 0 !important;
+        }
+        
+        /* 2. 각 컬럼의 최소 너비 해제 (좁아도 됨) */
+        [data-testid="column"] {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            padding: 0 1px !important;
+        }
+        
+        /* 3. 글자 크기 축소 (한 줄에 다 넣기 위해) */
+        .list-header { font-size: 0.75rem !important; text-align: center; }
+        div.stButton > button { font-size: 0.8rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .data-text { font-size: 0.75rem !important; margin-top: 2px; }
+        
+        /* 등락폭은 공간 부족하면 숨기거나 줄일 수 있음 (현재는 유지) */
     }
 
     /* 암호화폐/뉴스 스타일 */
@@ -104,8 +135,6 @@ st.markdown("""
     }
     .insight-label { font-size: 1rem; color: #666; margin-bottom: 5px; }
     .insight-value { font-size: 2rem; font-weight: bold; color: #333; }
-    .insight-sub { font-size: 0.9rem; color: #888; }
-    
     .news-card {
         background-color: white; padding: 15px; border-radius: 10px;
         border: 1px solid #eee; margin-bottom: 10px; height: 100%;
@@ -278,33 +307,21 @@ market_items = [
 
 # 1. 국제 증시
 with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
-    # [1] 차트 종목 선택 (Selectbox 사용 - 모바일 최적화)
-    options = [item["name"] for item in market_items]
-    current_idx = options.index(st.session_state['selected_name']) if st.session_state['selected_name'] in options else 0
-    
-    st.markdown("##### 📌 차트 종목 선택 (Select Chart)") # 안내 문구 추가
-    selected_option = st.selectbox(
-        label="차트 종목 선택", # 라벨 숨김 처리됨 (위 마크다운으로 대체)
-        options=options, 
-        index=current_idx,
-        label_visibility="collapsed"
-    )
-    
-    # 선택값이 바뀌면 상태 업데이트 및 리런
-    if selected_option != st.session_state['selected_name']:
-        st.session_state['selected_name'] = selected_option
-        for item in market_items:
-            if item["name"] == selected_option:
-                st.session_state['selected_ticker'] = item['ticker']
-                st.rerun()
-
-    # [2] 차트 렌더링
-    st.info(f"📊 현재 차트: **{st.session_state['selected_name']}**")
+    # 차트 렌더링
+    st.info(f"📈 현재 차트: **{st.session_state['selected_name']}**")
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
     st.markdown("---")
+    st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 종목명(이름)을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
     
-    # [3] 시세 리스트 (보기 전용 표)
-    html_rows = ""
+    # [리스트 헤더] - 가로 비율 설정 (모바일에서도 유지됨)
+    col_ratios = [1.6, 0.8, 0.8, 0.8]
+    h1, h2, h3, h4 = st.columns(col_ratios)
+    h1.markdown("<div class='list-header'>종목명</div>", unsafe_allow_html=True)
+    h2.markdown("<div class='list-header' style='text-align:right'>현재가</div>", unsafe_allow_html=True)
+    h3.markdown("<div class='list-header' style='text-align:right'>등락률</div>", unsafe_allow_html=True)
+    h4.markdown("<div class='list-header' style='text-align:right'>등락폭</div>", unsafe_allow_html=True)
+
+    # [리스트 본문] - 버튼 + CSS Hack 사용
     for item in market_items:
         price, rate, diff = 0, 0, 0
         try:
@@ -319,28 +336,27 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
         
-        # 선택된 종목은 배경색으로 표시
-        row_class = "selected-row" if st.session_state['selected_ticker'] == item['ticker'] else ""
+        # 선택된 항목인지 확인
+        is_selected = (st.session_state['selected_ticker'] == item['ticker'])
+        btn_label = f"✔ {item['name']}" if is_selected else item['name']
         
-        html_rows += f"<tr class='{row_class}'><td>{item['name']}</td><td>{price:,.2f}</td><td style='color:{color}'>{sign}{rate:.2f}%</td><td style='color:{color}'>{sign}{diff:,.2f}</td></tr>"
-
-    full_table_html = f"""
-    <table class="custom-table">
-        <thead>
-            <tr>
-                <th>종목명</th>
-                <th>현재가</th>
-                <th>등락률</th>
-                <th>등락폭</th>
-            </tr>
-        </thead>
-        <tbody>
-            {html_rows}
-        </tbody>
-    </table>
-    """
-    
-    st.markdown(full_table_html, unsafe_allow_html=True)
+        # 컬럼 생성
+        c1, c2, c3, c4 = st.columns(col_ratios)
+        
+        # 1열: 버튼 (투명하게 만들어서 텍스트처럼 보이게 함)
+        with c1:
+            if st.button(btn_label, key=f"btn_{item['ticker']}", use_container_width=True):
+                st.session_state['selected_ticker'] = item['ticker']
+                st.session_state['selected_name'] = item['name']
+                st.rerun()
+        
+        # 2~4열: 단순 텍스트 (클릭 불가능, 정보 표시용)
+        with c2: st.markdown(f"<span class='data-text'>{price:,.2f}</span>", unsafe_allow_html=True)
+        with c3: st.markdown(f"<span class='data-text' style='color:{color}'>{sign}{rate:.2f}%</span>", unsafe_allow_html=True)
+        with c4: st.markdown(f"<span class='data-text' style='color:{color}'>{sign}{diff:,.2f}</span>", unsafe_allow_html=True)
+        
+        # 구분선
+        st.markdown("<div style='border-bottom: 1px solid #eee; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
 
 
 # 2. 암호 화폐
