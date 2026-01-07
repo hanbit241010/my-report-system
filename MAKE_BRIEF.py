@@ -20,16 +20,22 @@ if 'selected_name' not in st.session_state:
 st.markdown("""
     <style>
     /* -------------------------------------------------------------------
-       [강력 숨김 모드] 관리자 메뉴 제거 
+       [강력 숨김 모드] Manage App 및 하단 요소 제거 
     ------------------------------------------------------------------- */
+    /* 헤더, 푸터, 툴바 숨김 */
     header[data-testid="stHeader"] { display: none !important; }
     footer { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
-    [data-testid="stManageAppButton"] { display: none !important; }
-    .stAppDeployButton { display: none !important; }
+    
+    /* 하단 Manage App 버튼 및 배포 버튼 숨김 (타겟팅 강화) */
+    [data-testid="stManageAppButton"] { display: none !important; visibility: hidden !important; height: 0 !important; }
+    .stAppDeployButton { display: none !important; visibility: hidden !important; }
     div[class*="stViewerBadge"] { display: none !important; }
-    [data-testid="stDecoration"] { display: none !important; }
+    
+    /* 하단 고정 상태 표시줄 숨김 */
     [data-testid="stStatusWidget"] { display: none !important; }
+    
+    /* ------------------------------------------------------------------- */
 
     /* [폰트] 섹션 헤더 확대 */
     .streamlit-expanderHeader p {
@@ -70,7 +76,7 @@ st.markdown("""
         width: 100%;
         border: none;
         background-color: transparent;
-        color: #333; /* 기본 글자색 */
+        color: #333;
         text-align: left;
         padding: 0;
         margin: 0;
@@ -80,23 +86,11 @@ st.markdown("""
         min-height: 0px;
         line-height: 1.5;
     }
-    div.stButton > button:hover {
-        color: #d60000; /* 호버 시 빨간색 */
-        background-color: transparent;
-    }
-    div.stButton > button:focus {
-        box-shadow: none;
-    }
-    div.stButton > button:active {
-        background-color: transparent;
-    }
+    div.stButton > button:hover { color: #d60000; background-color: transparent; }
+    div.stButton > button:focus { box-shadow: none; }
+    div.stButton > button:active { background-color: transparent; }
     
-    /* 버튼 내부 마크다운(p태그) 스타일 - 색상 적용을 위해 */
-    div.stButton > button p {
-        font-size: 1rem;
-        margin: 0;
-        padding: 0;
-    }
+    div.stButton > button p { font-size: 1rem; margin: 0; padding: 0; }
 
     /* [데이터 셀 스타일] */
     .data-text {
@@ -108,14 +102,31 @@ st.markdown("""
         margin-top: 5px;
     }
 
-    /* [모바일 강제 가로 정렬] */
+    /* [모바일 강제 가로 정렬 핵심 코드] */
     @media (max-width: 600px) {
         .title-text { font-size: 2rem; }
-        [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 0 !important; }
-        [data-testid="column"] { flex: 1 1 auto !important; min-width: 0 !important; padding: 0 1px !important; }
-        .list-header { font-size: 0.75rem !important; text-align: center; }
+        
+        /* 1. 컬럼 그룹(HorizontalBlock)이 세로로 바뀌는 것 방지 */
+        [data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-direction: row !important; /* 강제 가로 정렬 */
+            flex-wrap: nowrap !important;   /* 줄바꿈 금지 */
+            align-items: center !important;
+            width: 100% !important;
+        }
+        
+        /* 2. 개별 컬럼(Column)이 최소 너비를 가져서 밀리는 것 방지 */
+        [data-testid="column"] {
+            flex: 1 1 auto !important;
+            width: auto !important;
+            min-width: 0 !important; /* 최소 너비 0으로 설정해 좁아질 수 있게 함 */
+            padding: 0 1px !important;
+        }
+        
+        /* 3. 내부 텍스트 사이즈 조절 */
+        .list-header { font-size: 0.75rem !important; text-align: center; white-space: nowrap; }
         div.stButton > button { font-size: 0.8rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .data-text { font-size: 0.75rem !important; margin-top: 2px; }
+        .data-text { font-size: 0.75rem !important; margin-top: 2px; white-space: nowrap; }
     }
 
     /* 암호화폐/뉴스 스타일 */
@@ -300,7 +311,11 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     # 차트 렌더링
     st.info(f"📈 현재 차트: **{st.session_state['selected_name']}**")
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
-    st.markdown("---")
+    
+    # [수정됨] 차트와 리스트 사이의 불필요한 구분선(---) 제거함
+    # 간격 조절용 투명 박스만 살짝 추가
+    st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+    
     st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 종목명(이름)을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
     
     # [리스트 헤더]
@@ -329,18 +344,16 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         # 선택 여부 확인
         is_selected = (st.session_state['selected_ticker'] == item['ticker'])
         
-        # [핵심 디자인 변경]
+        # [디자인 유지] 선택된 경우 빨간색+볼드체+포인트라인
         if is_selected:
-            # 선택됨: 빨간색(:red) + 볼드체(**) + 포인트 라인(▍)
             btn_label = f":red[**▍ {item['name']}**]"
         else:
-            # 선택 안됨: 그냥 텍스트
             btn_label = item['name']
         
         # 컬럼 생성
         c1, c2, c3, c4 = st.columns(col_ratios)
         
-        # 1열: 버튼 (이름 클릭용)
+        # 1열: 버튼
         with c1:
             if st.button(btn_label, key=f"btn_{item['ticker']}", use_container_width=True):
                 st.session_state['selected_ticker'] = item['ticker']
