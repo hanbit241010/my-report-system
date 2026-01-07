@@ -1,6 +1,5 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import FinanceDataReader as fdr
 import yfinance as yf
 import pandas as pd
 import requests
@@ -50,48 +49,28 @@ st.markdown("""
     .up { color: #d60000; } 
     .down { color: #0051c7; } 
 
-    /* 국제 증시 리스트 헤더 */
+    /* 리스트 헤더 */
     .market-header {
         font-weight: bold; border-bottom: 2px solid #555; padding: 10px 5px; color: #333; font-size: 1rem;
     }
 
     /* 버튼 스타일 (리스트 아이템화) */
     div.stButton > button {
-        width: 100%;
-        border: none;
-        background-color: transparent;
-        color: #333;
-        text-align: left;
-        padding: 12px 2px;
-        font-size: 1.1rem;
-        font-weight: 500;
-        margin: 0;
-        line-height: 1.2;
-        white-space: nowrap; 
-        overflow: hidden;
-        text-overflow: ellipsis;
+        width: 100%; border: none; background-color: transparent;
+        color: #333; text-align: left; padding: 12px 2px;
+        font-size: 1.1rem; font-weight: 500; margin: 0;
+        line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    div.stButton > button:hover {
-        background-color: #f9f9f9;
-        color: #d60000;
-    }
-    div.stButton > button:focus {
-        box-shadow: none;
-        color: #d60000;
-    }
+    div.stButton > button:hover { background-color: #f9f9f9; color: #d60000; }
+    div.stButton > button:focus { box-shadow: none; color: #d60000; }
 
-    /* 수치 데이터 셀 정렬용 */
+    /* 수치 데이터 셀 */
     .data-cell {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        height: 48px;
-        font-weight: bold;
-        font-size: 1rem;
-        white-space: nowrap;
+        display: flex; align-items: center; justify-content: flex-end;
+        height: 48px; font-weight: bold; font-size: 1rem; white-space: nowrap;
     }
     
-    /* [모바일 최적화] */
+    /* 모바일 최적화 */
     @media (max-width: 600px) {
         .market-header { font-size: 0.85rem !important; padding: 10px 2px; }
         div.stButton > button { font-size: 0.9rem !important; padding: 12px 0; }
@@ -100,7 +79,7 @@ st.markdown("""
         .title-text { font-size: 2rem; }
     }
     
-    /* 암호화폐 카드 스타일 */
+    /* 암호화폐 카드 */
     .insight-box {
         background-color: #f8f9fa; border-radius: 10px; padding: 20px;
         text-align: center; border: 1px solid #eee;
@@ -123,10 +102,9 @@ st.markdown("""
 # 4. 타이틀 및 날짜
 st.markdown("<div class='title-text'>📈 AJIN REPORT</div>", unsafe_allow_html=True)
 
-# [수정] 날짜 및 주차 계산 (ISO 달력 기준)
 now = datetime.now()
 date_part = now.strftime("%Y. %m. %d")
-week_num = now.isocalendar()[1] # ISO 기준 주차 사용 (1월 7일 -> Week 02)
+week_num = now.isocalendar()[1] 
 today_str = f"{date_part} (Week {week_num:02d})"
 
 date_html = f"""
@@ -138,25 +116,66 @@ date_html = f"""
 """
 st.markdown(date_html, unsafe_allow_html=True)
 
-# 5. 상단 전광판
-ticker_html = """
+# --- [추가] 전광판용 데이터 수집 함수 ---
+def get_ticker_html_data():
+    # 전광판에 표시할 종목 리스트 (티커 매핑)
+    # 나스닥(^IXIC), 원달러(KRW=X), 비트코인(BTC-KRW), 코스피(^KS11), 코스닥(^KQ11)
+    targets = {
+        "나스닥": "^IXIC",
+        "원/달러": "KRW=X",
+        "비트코인": "BTC-KRW", # 한국 원화 기준
+        "코스피": "^KS11",
+        "코스닥": "^KQ11"
+    }
+    
+    items_html = ""
+    
+    # 한 번에 데이터를 가져오거나 개별 호출 (여기선 안전하게 개별 호출)
+    for name, ticker in targets.items():
+        try:
+            data = yf.Ticker(ticker).history(period="5d")
+            if len(data) >= 1:
+                price = data['Close'].iloc[-1]
+                # 등락률 계산
+                if len(data) > 1:
+                    prev = data['Close'].iloc[-2]
+                    diff = price - prev
+                    pct = (diff / prev) * 100
+                else:
+                    diff = 0
+                    pct = 0
+                
+                # 스타일링
+                color_class = "up" if diff >= 0 else "down"
+                sign = "+" if diff >= 0 else ""
+                
+                # HTML 조각 생성
+                items_html += f'<span class="ticker-item">{name} {price:,.2f} <span class="{color_class}">({sign}{pct:.2f}%)</span></span>'
+            else:
+                items_html += f'<span class="ticker-item">{name} - </span>'
+        except:
+            items_html += f'<span class="ticker-item">{name} Error</span>'
+            
+    return items_html
+
+# 5. 상단 전광판 (실시간 데이터 반영)
+with st.spinner("시장 데이터 동기화 중..."):
+    live_ticker_items = get_ticker_html_data()
+
+ticker_html = f"""
 <div class="ticker-wrap">
     <div class="ticker-content">
-        <span class="ticker-item">나스닥 14,500.50 <span class="down">(-0.16%)</span></span>
-        <span class="ticker-item">원/달러 1,446.35 <span class="up">(+0.41%)</span></span>
-        <span class="ticker-item">비트코인 134,826,448 <span class="down">(-0.72%)</span></span>
-        <span class="ticker-item">코스피 4,525.48 <span class="up">(+1.52%)</span></span>
-        <span class="ticker-item">코스닥 955.97 <span class="down">(-0.16%)</span></span>
+        {live_ticker_items}
     </div>
 </div>
 """
 st.markdown(ticker_html, unsafe_allow_html=True)
 
+
 # --- 함수 모음 ---
 
 def render_highchart_global(ticker, name, height=400):
     try:
-        # [수정] 1Y 버튼 활성화를 위해 데이터 조회 기간을 2년(2y)으로 늘림
         df = yf.download(ticker, period="2y", interval="1d", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.droplevel(1)
@@ -185,7 +204,6 @@ def render_highchart_global(ticker, name, height=400):
         ohlc_json = json.dumps(ohlc)
         vol_json = json.dumps(volume)
         
-        # [수정] 워터마크 위치 상단 40%로 조정 (height * 0.4)
         html_code = f"""
         <html>
         <head><script src="https://code.highcharts.com/stock/highstock.js"></script></head>
@@ -215,44 +233,22 @@ def render_highchart_global(ticker, name, height=400):
                                 var chart = this;
                                 var width = chart.plotWidth;
                                 var height = chart.plotHeight;
-                                
                                 var x = chart.plotLeft + width / 2;
-                                var y = chart.plotTop + height * 0.4; // [수정] 상단 40% 지점
+                                var y = chart.plotTop + height * 0.4;
                                 var fontSize = Math.min(width / 15, 50);
-                                
                                 if (!chart.watermark) {{
                                     chart.watermark = chart.renderer.text('AJIN PARTNERS', x, y)
-                                        .css({{
-                                            color: '#E0E0E0',
-                                            fontWeight: '900',
-                                            opacity: 0.6
-                                        }})
-                                        .attr({{
-                                            align: 'center',
-                                            zIndex: 0
-                                        }})
-                                        .add();
+                                        .css({{ color: '#E0E0E0', fontWeight: '900', opacity: 0.6 }})
+                                        .attr({{ align: 'center', zIndex: 0 }}).add();
                                 }}
                                 chart.watermark.attr({{ x: x, y: y }}).css({{ fontSize: fontSize + 'px' }});
                             }}
                         }}
                     }},
-                    yAxis: [{{
-                        labels: {{ align: 'right', x: -3 }},
-                        height: '75%', lineWidth: 2, resize: {{ enabled: true }}
-                    }}, {{
-                        labels: {{ align: 'right', x: -3 }},
-                        top: '75%', height: '25%', offset: 0, lineWidth: 2
-                    }}],
+                    yAxis: [{{ labels: {{ align: 'right', x: -3 }}, height: '75%', lineWidth: 2, resize: {{ enabled: true }} }}, {{ labels: {{ align: 'right', x: -3 }}, top: '75%', height: '25%', offset: 0, lineWidth: 2 }}],
                     tooltip: {{ split: true }},
-                    plotOptions: {{
-                        candlestick: {{ color: '#0051c7', upColor: '#d60000', lineColor: '#0051c7', upLineColor: '#d60000' }}
-                    }},
-                    series: [{{
-                        type: 'candlestick', name: '{name}', data: {ohlc_json}
-                    }}, {{
-                        type: 'column', name: 'Volume', data: {vol_json}, yAxis: 1, color: 'rgba(0,0,0,0.1)'
-                    }}]
+                    plotOptions: {{ candlestick: {{ color: '#0051c7', upColor: '#d60000', lineColor: '#0051c7', upLineColor: '#d60000' }} }},
+                    series: [{{ type: 'candlestick', name: '{name}', data: {ohlc_json} }}, {{ type: 'column', name: 'Volume', data: {vol_json}, yAxis: 1, color: 'rgba(0,0,0,0.1)' }}]
                 }});
             </script>
         </body>
@@ -264,19 +260,39 @@ def render_highchart_global(ticker, name, height=400):
 
 def render_highchart_domestic(ticker, name, height=450):
     try:
-        df = fdr.DataReader(ticker, '2024-01-01')
+        yf_ticker = "^KS11" if ticker == "KS11" else "^KQ11"
+        if ticker == "USD/KRW": yf_ticker = "KRW=X"
+            
+        df = yf.download(yf_ticker, period="2y", interval="1d", progress=False)
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1)
         df = df.reset_index()
+
         ohlc = []
         volume = []
+        
+        if df.empty:
+            st.warning(f"{name} 데이터 수집 실패")
+            return
+
         for idx, row in df.iterrows():
-            ts = int(row['Date'].timestamp() * 1000)
-            ohlc.append([ts, row['Open'], row['High'], row['Low'], row['Close']])
-            vol = row['Volume'] if pd.notnull(row['Volume']) else 0
-            volume.append([ts, vol])
+            date_val = row.get('Date', row.name)
+            if not isinstance(date_val, pd.Timestamp): continue
+            ts = int(date_val.timestamp() * 1000)
+            
+            op = float(row['Open']) if pd.notnull(row['Open']) else 0
+            hi = float(row['High']) if pd.notnull(row['High']) else 0
+            lo = float(row['Low']) if pd.notnull(row['Low']) else 0
+            cl = float(row['Close']) if pd.notnull(row['Close']) else 0
+            vo = int(row['Volume']) if pd.notnull(row['Volume']) else 0
+
+            ohlc.append([ts, op, hi, lo, cl])
+            volume.append([ts, vo])
+            
         ohlc_json = json.dumps(ohlc)
         vol_json = json.dumps(volume)
         
-        # [수정] 국내 증시 차트에도 워터마크 위치 40% 적용
         html_code = f"""
         <html>
         <head><script src="https://code.highcharts.com/stock/highstock.js"></script></head>
@@ -299,44 +315,22 @@ def render_highchart_domestic(ticker, name, height=450):
                                 var chart = this;
                                 var width = chart.plotWidth;
                                 var height = chart.plotHeight;
-                                
                                 var x = chart.plotLeft + width / 2;
-                                var y = chart.plotTop + height * 0.4; // [수정] 상단 40% 지점
+                                var y = chart.plotTop + height * 0.4;
                                 var fontSize = Math.min(width / 15, 50);
-                                
                                 if (!chart.watermark) {{
                                     chart.watermark = chart.renderer.text('AJIN PARTNERS', x, y)
-                                        .css({{
-                                            color: '#E0E0E0',
-                                            fontWeight: '900',
-                                            opacity: 0.6
-                                        }})
-                                        .attr({{
-                                            align: 'center',
-                                            zIndex: 0
-                                        }})
-                                        .add();
+                                        .css({{ color: '#E0E0E0', fontWeight: '900', opacity: 0.6 }})
+                                        .attr({{ align: 'center', zIndex: 0 }}).add();
                                 }}
                                 chart.watermark.attr({{ x: x, y: y }}).css({{ fontSize: fontSize + 'px' }});
                             }}
                         }}
                     }},
-                    yAxis: [{{
-                        labels: {{ align: 'right', x: -3 }},
-                        height: '75%', lineWidth: 2, resize: {{ enabled: true }}
-                    }}, {{
-                        labels: {{ align: 'right', x: -3 }},
-                        top: '75%', height: '25%', offset: 0, lineWidth: 2
-                    }}],
+                    yAxis: [{{ labels: {{ align: 'right', x: -3 }}, height: '75%', lineWidth: 2, resize: {{ enabled: true }} }}, {{ labels: {{ align: 'right', x: -3 }}, top: '75%', height: '25%', offset: 0, lineWidth: 2 }}],
                     tooltip: {{ split: true }},
-                    plotOptions: {{
-                        candlestick: {{ color: '#0051c7', upColor: '#d60000', lineColor: '#0051c7', upLineColor: '#d60000' }}
-                    }},
-                    series: [{{
-                        type: 'candlestick', name: '{name}', data: {ohlc_json}
-                    }}, {{
-                        type: 'column', name: 'Volume', data: {vol_json}, yAxis: 1, color: 'rgba(0,0,0,0.1)'
-                    }}]
+                    plotOptions: {{ candlestick: {{ color: '#0051c7', upColor: '#d60000', lineColor: '#0051c7', upLineColor: '#d60000' }} }},
+                    series: [{{ type: 'candlestick', name: '{name}', data: {ohlc_json} }}, {{ type: 'column', name: 'Volume', data: {vol_json}, yAxis: 1, color: 'rgba(0,0,0,0.1)' }}]
                 }});
             </script>
         </body>
@@ -502,31 +496,45 @@ with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
                     """, unsafe_allow_html=True)
 
 
-# 3. 국내 증시
+# 3. 국내 증시 (yfinance 사용)
 with st.expander("📈 국내 증시 (Domestic Market)", expanded=False):
     
     with st.spinner("잠시만 기다려주세요... 실시간 데이터를 불러오는 중입니다."):
         try:
-            kp_df = fdr.DataReader('KS11', '2025-01-01')
-            kq_df = fdr.DataReader('KQ11', '2025-01-01')
-            ex_df = fdr.DataReader('USD/KRW', '2025-01-01')
+            kp_df = yf.download('^KS11', period='5d', progress=False)
+            kq_df = yf.download('^KQ11', period='5d', progress=False)
+            ex_df = yf.download('KRW=X', period='5d', progress=False)
             
-            kp_now = kp_df.iloc[-1]['Close']
-            kp_prev = kp_df.iloc[-2]['Close']
-            kp_delta = kp_now - kp_prev
-            kp_pct = (kp_delta / kp_prev) * 100
+            if isinstance(kp_df.columns, pd.MultiIndex): kp_df.columns = kp_df.columns.droplevel(1)
+            if isinstance(kq_df.columns, pd.MultiIndex): kq_df.columns = kq_df.columns.droplevel(1)
+            if isinstance(ex_df.columns, pd.MultiIndex): ex_df.columns = ex_df.columns.droplevel(1)
+
+            if not kp_df.empty:
+                kp_now = kp_df['Close'].iloc[-1]
+                kp_prev = kp_df['Close'].iloc[-2]
+                kp_delta = kp_now - kp_prev
+                kp_pct = (kp_delta / kp_prev) * 100
+            else:
+                kp_now, kp_delta, kp_pct = 0, 0, 0
             
-            kq_now = kq_df.iloc[-1]['Close']
-            kq_prev = kq_df.iloc[-2]['Close']
-            kq_delta = kq_now - kq_prev
-            kq_pct = (kq_delta / kq_prev) * 100
-            
-            ex_now = ex_df.iloc[-1]['Close']
-            ex_prev = ex_df.iloc[-2]['Close']
-            ex_delta = ex_now - ex_prev
-            ex_pct = (ex_delta / ex_prev) * 100
+            if not kq_df.empty:
+                kq_now = kq_df['Close'].iloc[-1]
+                kq_prev = kq_df['Close'].iloc[-2]
+                kq_delta = kq_now - kq_prev
+                kq_pct = (kq_delta / kq_prev) * 100
+            else:
+                kq_now, kq_delta, kq_pct = 0, 0, 0
+                
+            if not ex_df.empty:
+                ex_now = ex_df['Close'].iloc[-1]
+                ex_prev = ex_df['Close'].iloc[-2]
+                ex_delta = ex_now - ex_prev
+                ex_pct = (ex_delta / ex_prev) * 100
+            else:
+                ex_now, ex_delta, ex_pct = 0, 0, 0
             
         except Exception as e:
+            st.error(f"데이터 조회 오류: {e}")
             kp_now, kp_delta, kp_pct = 0.0, 0.0, 0.0
             kq_now, kq_delta, kq_pct = 0.0, 0.0, 0.0
             ex_now, ex_delta, ex_pct = 0.0, 0.0, 0.0
