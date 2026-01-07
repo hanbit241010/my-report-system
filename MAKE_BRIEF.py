@@ -19,10 +19,14 @@ if 'selected_name' not in st.session_state:
 # 3. 스타일(CSS) 정의
 st.markdown("""
     <style>
-    /* 헤더/푸터 숨김 */
+    /* [기본] 헤더/푸터/배포버튼 숨김 */
     header[data-testid="stHeader"] { display: none !important; }
     footer { display: none !important; }
     .stDeployButton { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    [data-testid="stDecoration"] { display: none !important; }
+    [data-testid="stStatusWidget"] { display: none !important; }
+    .stAppDeployButton { display: none !important; } /* 왕관/로켓 버튼 숨김 */
     
     /* [폰트] 섹션 헤더(Expander Title) 대폭 확대 */
     .streamlit-expanderHeader p {
@@ -75,26 +79,45 @@ st.markdown("""
         /* 타이틀 크기 축소 */
         .title-text { font-size: 2rem; }
         
-        /* 컬럼이 세로로 쌓이는 것 방지 (가로 정렬 강제) */
+        /* 1. 가로 정렬 강제 (세로로 쌓이는 것 방지) */
         [data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-direction: row !important;
             flex-wrap: nowrap !important;
-            overflow-x: hidden !important; /* 가로 스크롤 방지 */
+            align-items: center !important;
         }
         
-        /* 컬럼 최소 너비 해제 (좁아도 들어가게) */
+        /* 2. 컬럼 너비 강제 조정 (최소 너비 해제) */
         [data-testid="column"] {
             min-width: 0 !important;
-            flex: 1 1 auto !important;
-            padding: 0 1px !important; /* 컬럼 간 간격 최소화 */
+            width: auto !important;
+            flex-shrink: 1 !important;
+            padding: 0 1px !important;
         }
         
-        /* 폰트 사이즈 대폭 축소 (표 안에 다 넣기 위함) */
-        .market-header { font-size: 0.75rem !important; padding: 10px 1px; text-align: center !important; }
-        div.stButton > button { font-size: 0.8rem !important; padding: 14px 0 !important; }
-        .data-cell { font-size: 0.75rem !important; justify-content: center !important; }
+        /* 3. 폰트 및 여백 다이어트 (한 줄에 다 넣기 위해) */
+        .market-header { 
+            font-size: 0.7rem !important; 
+            padding: 5px 0 !important; 
+            text-align: center !important;
+            white-space: nowrap;
+        }
         
-        /* 탭 제목 */
-        .streamlit-expanderHeader p { font-size: 1.6rem !important; }
+        div.stButton > button { 
+            font-size: 0.75rem !important; 
+            padding: 10px 0 !important; 
+            margin: 0 !important;
+        }
+        
+        .data-cell { 
+            font-size: 0.75rem !important; 
+            height: 40px !important; /* 높이 줄임 */
+            justify-content: center !important; /* 모바일은 중앙 정렬이 깔끔 */
+            padding-right: 0 !important;
+        }
+        
+        /* 섹션 헤더 */
+        .streamlit-expanderHeader p { font-size: 1.5rem !important; }
     }
     
     /* 암호화폐 카드 */
@@ -296,7 +319,7 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         {"name": "이더리움", "ticker": "ETH-USD"},
     ]
     
-    # [수정] 모바일에서도 가로로 배치되도록 비율 조정 (이름칸을 좀 더 넓게)
+    # [모바일] 4열 강제 배치
     h_c1, h_c2, h_c3, h_c4 = st.columns([1.6, 0.8, 0.8, 0.8])
     h_c1.markdown("<div class='market-header'>종목명</div>", unsafe_allow_html=True)
     h_c2.markdown("<div class='market-header' style='text-align:right'>현재가</div>", unsafe_allow_html=True)
@@ -318,7 +341,6 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         sign = "+" if diff >= 0 else ""
         btn_label = f"▍ {item['name']}" if st.session_state['selected_ticker'] == item['ticker'] else f"\u00A0\u00A0\u00A0{item['name']}"
         
-        # [수정] 데이터 행
         c1, c2, c3, c4 = st.columns([1.6, 0.8, 0.8, 0.8])
         with c1:
             if st.button(btn_label, key=f"btn_{item['ticker']}", use_container_width=True): 
