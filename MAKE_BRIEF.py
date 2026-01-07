@@ -4,8 +4,9 @@ import yfinance as yf
 import pandas as pd
 import requests
 import feedparser
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
+import time
 
 # 1. 페이지 설정
 st.set_page_config(page_title="AJIN REPORT", layout="wide")
@@ -14,7 +15,7 @@ st.set_page_config(page_title="AJIN REPORT", layout="wide")
 if 'selected_ticker' not in st.session_state:
     st.session_state['selected_ticker'] = 'BTC-USD'
 if 'selected_name' not in st.session_state:
-    st.session_state['selected_name'] = '비트코인'
+    st.session_state['selected_name'] = '🪙 비트코인'
 
 # 3. 스타일(CSS) 정의
 st.markdown("""
@@ -27,40 +28,57 @@ st.markdown("""
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
     
-    /* 기존 요소 투명화 */
-    [data-testid="stManageAppButton"] { opacity: 0 !important; pointer-events: none !important; }
+    /* 기존 요소 투명화 및 클릭 방지 */
+    [data-testid="stManageAppButton"] { opacity: 0 !important; pointer-events: none !important; height: 0 !important;}
     .stAppDeployButton { display: none !important; }
     div[class*="stViewerBadge"] { display: none !important; }
 
-    /* [커스텀 하단 배너] z-index를 21억(최대치)으로 설정하여 무조건 덮음 */
+    /* [커스텀 하단 배너] B안 디자인 적용 */
     .custom-footer {
         position: fixed;
         bottom: 0;
         left: 0;
         width: 100%;
-        height: 60px; /* 배너 높이 고정 (왕관 가릴 만큼 충분히) */
+        height: 70px; /* 높이 넉넉하게 (왕관 완벽 커버) */
         background-color: #ffffff;
         border-top: 1px solid #e0e0e0;
         padding: 0 20px;
-        z-index: 2147483647; /* 최상단 레이어 */
+        z-index: 2147483647; /* 최상단 레이어 (21억) */
         display: flex;
         align-items: center;
         justify-content: space-between;
         box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
     }
-    .footer-content { display: flex; align-items: center; gap: 10px; }
-    .footer-logo { font-size: 1.1rem; font-weight: 900; color: #333; }
-    .footer-sub { font-size: 0.75rem; color: #888; margin-top: 2px;}
+    .footer-content {
+        display: flex;
+        flex-direction: column; /* 위아래 두 줄 배치 */
+        justify-content: center;
+    }
+    .footer-main {
+        font-size: 1.1rem;
+        font-weight: 900; /* 진하고 크게 */
+        color: #333;
+        line-height: 1.2;
+    }
+    .footer-sub {
+        font-size: 0.75rem;
+        font-weight: 400; /* 얇고 작게 */
+        color: #888;
+        margin-top: 2px;
+        letter-spacing: 0.5px;
+    }
     .footer-btn {
         background-color: #d60000;
         color: white !important;
-        padding: 8px 15px;
+        padding: 8px 16px;
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: bold;
         text-decoration: none;
-        box-shadow: 0 2px 5px rgba(214, 0, 0, 0.3);
+        box-shadow: 0 3px 6px rgba(214, 0, 0, 0.3);
+        transition: transform 0.1s;
     }
+    .footer-btn:active { transform: scale(0.95); }
     
     /* -------------------------------------------------------------------
        [2] 칩(Chip) 스타일 (자연스러운 줄바꿈 적용)
@@ -68,20 +86,21 @@ st.markdown("""
     div.row-widget.stRadio > div {
         flex-direction: row;
         align-items: center;
-        flex-wrap: wrap !important; /* 화면 좁으면 자연스럽게 줄바꿈 */
+        flex-wrap: wrap !important; /* 화면 좁으면 줄바꿈 */
         gap: 8px;
         padding-bottom: 5px;
-        justify-content: flex-start; /* 왼쪽 정렬 */
+        justify-content: flex-start;
     }
     div.row-widget.stRadio > div[role="radiogroup"] > label {
         background-color: #f0f2f6;
-        padding: 6px 14px;
-        border-radius: 18px;
-        border: 1px solid #ddd;
+        padding: 8px 14px;
+        border-radius: 20px;
+        border: 1px solid #e0e0e0;
         cursor: pointer;
         transition: all 0.2s;
         margin-right: 0 !important;
         font-size: 0.9rem;
+        color: #555;
     }
     /* 선택된 칩 */
     div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
@@ -89,16 +108,15 @@ st.markdown("""
         color: white !important;
         border-color: #d60000 !important;
         font-weight: bold;
-        box-shadow: 0 2px 4px rgba(214,0,0,0.2);
+        box-shadow: 0 2px 5px rgba(214,0,0,0.2);
     }
-    /* 라디오 버튼 숨김 */
     div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child { display: none; }
     div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child { margin-left: 0px; }
 
     /* -------------------------------------------------------------------
        [3] 기본 UI 스타일
     ------------------------------------------------------------------- */
-    .streamlit-expanderHeader p { font-size: 2.0rem !important; font-weight: 800 !important; color: #000 !important; }
+    .streamlit-expanderHeader p { font-size: 1.8rem !important; font-weight: 800 !important; color: #222 !important; }
     .title-text { text-align: center; font-size: 2.5rem; font-weight: 800; margin-bottom: 10px; color: #000; }
     
     /* 전광판 */
@@ -111,29 +129,44 @@ st.markdown("""
     /* 테이블 스타일 */
     .custom-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: 'sans-serif'; font-size: 0.9rem; }
     .custom-table th { border-bottom: 2px solid #333; padding: 10px 5px; text-align: right; color: #333; font-weight: bold; }
-    .custom-table td { border-bottom: 1px solid #eee; padding: 12px 5px; text-align: right; color: #333; font-weight: 500; }
+    .custom-table td { border-bottom: 1px solid #eee; padding: 14px 5px; text-align: right; color: #333; font-weight: 500; }
     .custom-table th:first-child, .custom-table td:first-child { text-align: left; }
     
-    /* 선택된 행 스타일 */
-    .selected-row { background-color: #fff0f0; }
-    .selected-text { color: #d60000; font-weight: 900; border-left: 4px solid #d60000; padding-left: 8px; }
+    /* 선택된 행 스타일: 배경색 + 빨간색 텍스트 + 볼드 + 왼쪽 포인트 라인 */
+    .selected-row { background-color: #fff5f5; }
+    .selected-text { 
+        color: #d60000; 
+        font-weight: 900; 
+        border-left: 4px solid #d60000; 
+        padding-left: 8px; 
+        display: inline-block;
+    }
 
     /* 모바일 대응 */
     @media (max-width: 600px) {
         .title-text { font-size: 2rem; }
-        .custom-table th, .custom-table td { font-size: 0.75rem; padding: 10px 2px; }
-        
-        /* 배너 때문에 가려지지 않게 여백 추가 */
+        .custom-table th, .custom-table td { font-size: 0.8rem; padding: 12px 2px; }
+        /* 하단 배너 가림 방지 여백 */
         .block-container { padding-bottom: 100px !important; }
     }
 
-    /* 카드 */
-    .insight-box { background-color: #f8f9fa; border-radius: 10px; padding: 20px; text-align: center; border: 1px solid #eee; margin-bottom: 10px; }
-    .insight-label { font-size: 1rem; color: #666; margin-bottom: 5px; }
-    .insight-value { font-size: 2rem; font-weight: bold; color: #333; }
-    .news-card { background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; margin-bottom: 10px; height: 100%; }
-    .news-title { font-weight: bold; font-size: 1rem; margin-bottom: 5px; color: #333; text-decoration: none; display: block; }
-    .news-date { font-size: 0.85rem; color: #888; }
+    /* 카드 스타일 */
+    .insight-box { background-color: #f8f9fa; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #eee; margin-bottom: 10px; }
+    .insight-label { font-size: 0.95rem; color: #666; margin-bottom: 5px; font-weight: 600;}
+    .insight-value { font-size: 1.8rem; font-weight: 800; color: #333; }
+    
+    .news-card { 
+        background-color: white; 
+        padding: 15px; 
+        border-radius: 12px; 
+        border: 1px solid #eee; 
+        margin-bottom: 12px; 
+        height: 100%;
+        transition: transform 0.2s;
+    }
+    .news-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .news-title { font-weight: bold; font-size: 1rem; margin-bottom: 8px; color: #333; text-decoration: none; display: block; line-height: 1.4; }
+    .news-date { font-size: 0.8rem; color: #999; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -146,7 +179,7 @@ week_num = now.isocalendar()[1]
 today_str = f"{date_part} (Week {week_num:02d})"
 
 st.markdown(f"""
-<div style="display: flex; justify-content: center; margin-bottom: 20px;">
+<div style="display: flex; justify-content: center; margin-bottom: 25px;">
     <div style="background-color: #333; color: white; padding: 8px 25px; border-radius: 20px; font-weight: bold; font-size: 1rem; box-shadow: 0 3px 6px rgba(0,0,0,0.2);">
         {today_str}
     </div>
@@ -185,7 +218,6 @@ st.markdown(f"""<div class="ticker-wrap"><div class="ticker-content">{live_ticke
 # --- 함수 모음 ---
 def render_highchart_global(ticker, name, height=400):
     try:
-        # 금, 은, 오일의 경우 티커 심볼 처리
         df = yf.download(ticker, period="2y", interval="1d", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         df = df.reset_index()
@@ -277,14 +309,14 @@ def get_crypto_insight():
         if btc * usd > 0: kimp = ((kor - (btc * usd)) / (btc * usd)) * 100
     except: pass
     try:
-        # CoinGecko 대신 CoinLore 사용 (무료 API 제한이 덜함)
+        # [데이터] CoinLore API로 교체 (0% 오류 해결)
         res = requests.get("https://api.coinlore.net/api/global/", timeout=2).json()
         dom = float(res[0]['btc_d'])
     except: pass
     return kimp, dom
 
 def get_crypto_news():
-    # 블록미디어(BlockMedia) RSS - 네이버 코인뉴스 공급처, 링크 오류 없음
+    # [뉴스] 블록미디어 RSS (링크 오류 해결)
     try: return feedparser.parse("https://www.blockmedia.co.kr/feed").entries[:6]
     except: return []
 
@@ -299,7 +331,7 @@ def render_custom_metric(label, value, delta, pct):
 
 # --- 메인 컨텐츠 ---
 
-# [수정] 종목 7개로 확장 및 아이콘 변경 (4개/3개 배치)
+# [수정] 7개 종목 & 아이콘 업데이트
 market_items = [
     {"name": "🪙 비트코인", "ticker": "BTC-USD"},
     {"name": "💲 나스닥", "ticker": "^IXIC"},
@@ -315,9 +347,9 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     
     # [1] 상단 칩(Chip) UI
     options = [item["name"] for item in market_items]
-    # 이름 변경으로 인한 인덱스 재조정
     current_name = st.session_state['selected_name']
-    # 기존 선택된 이름이 새 리스트에 없으면 기본값(비트코인)으로 리셋
+    
+    # 리스트 변경 대응 (기본값 리셋)
     if current_name not in options:
          current_name = options[0]
          st.session_state['selected_name'] = current_name
@@ -331,7 +363,6 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         label_visibility="collapsed"
     )
     
-    # 선택 변경 시 상태 업데이트
     if selected_chip != st.session_state['selected_name']:
         st.session_state['selected_name'] = selected_chip
         for item in market_items:
@@ -363,7 +394,7 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
         
-        # 선택된 행 스타일링
+        # 선택된 행 하이라이트 (포인트 라인 + 배경색 + 볼드)
         if st.session_state['selected_ticker'] == item['ticker']:
             row_class = "selected-row"
             name_cell = f"<span class='selected-text'>{item['name']}</span>"
@@ -403,15 +434,30 @@ with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
     with ic2:
         st.markdown(f"""<div class="insight-box"><div class="insight-label">비트코인 점유율 (BTC Dominance)</div><div class="insight-value" style="color: #f7931a;">{dom:.1f}%</div><div class="insight-sub">전체 코인 시장 중 BTC 비중</div></div>""", unsafe_allow_html=True)
     st.markdown("---")
-    st.subheader("📰 주요 코인 뉴스 (BlockMedia)")
+    st.subheader("📰 주요 코인 뉴스")
     for i in range(0, len(news_list), 2):
         nc = st.columns(2)
         for j in range(2):
             if i + j < len(news_list):
                 entry = news_list[i+j]
-                try: dt = datetime(*entry.published_parsed[:6]).strftime('%Y-%m-%d %H:%M')
-                except: dt = ""
-                with nc[j]: st.markdown(f"""<div class="news-card"><a href="{entry.link}" target="_blank" class="news-title">{entry.title}</a><div class="news-date">{dt} | {entry.source.title if 'source' in entry else 'News'}</div></div>""", unsafe_allow_html=True)
+                
+                # [시간 변환] UTC -> KST (+9시간)
+                dt_str = ""
+                try:
+                    if hasattr(entry, 'published_parsed'):
+                        # struct_time -> datetime 변환
+                        dt_utc = datetime(*entry.published_parsed[:6])
+                        dt_kst = dt_utc + timedelta(hours=9)
+                        # A안: 정확한 시간 표기
+                        dt_str = dt_kst.strftime('%Y-%m-%d %H:%M')
+                except: pass
+                
+                with nc[j]: 
+                    st.markdown(f"""
+                    <div class="news-card">
+                        <a href="{entry.link}" target="_blank" class="news-title">{entry.title}</a>
+                        <div class="news-date">{dt_str} | BlockMedia</div>
+                    </div>""", unsafe_allow_html=True)
 
 # 3. 국내 증시
 with st.expander("📈 국내 증시 (Domestic Market)", expanded=False):
@@ -447,12 +493,12 @@ with st.expander("📈 국내 증시 (Domestic Market)", expanded=False):
     st.subheader("KOSDAQ Market Trend")
     render_highchart_domestic('KQ11', 'KOSDAQ', height=400)
 
-# [하단 커스텀 배너] - Streamlit Footer 가리기용 (높이 60px)
+# [하단 커스텀 배너] B안 적용 (두 줄 디자인)
 st.markdown("""
 <div class="custom-footer">
     <div class="footer-content">
-        <div class="footer-logo">🏢 AJIN PARTNERS</div>
-        <div class="footer-sub">Financial Report</div>
+        <div class="footer-main">Financial Report</div>
+        <div class="footer-sub">- by Ajin Partners</div>
     </div>
     <a href="tel:010-0000-0000" class="footer-btn">📞 문의하기</a>
 </div>
