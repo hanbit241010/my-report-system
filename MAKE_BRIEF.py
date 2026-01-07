@@ -65,12 +65,12 @@ st.markdown("""
         font-size: 1rem;
     }
 
-    /* [버튼 스타일 - 표처럼 보이게 위장] */
+    /* [버튼 스타일 - 텍스트처럼 위장] */
     div.stButton > button {
         width: 100%;
         border: none;
         background-color: transparent;
-        color: #333;
+        color: #333; /* 기본 글자색 */
         text-align: left;
         padding: 0;
         margin: 0;
@@ -86,11 +86,16 @@ st.markdown("""
     }
     div.stButton > button:focus {
         box-shadow: none;
-        color: #d60000;
     }
     div.stButton > button:active {
-        color: #d60000;
         background-color: transparent;
+    }
+    
+    /* 버튼 내부 마크다운(p태그) 스타일 - 색상 적용을 위해 */
+    div.stButton > button p {
+        font-size: 1rem;
+        margin: 0;
+        padding: 0;
     }
 
     /* [데이터 셀 스타일] */
@@ -100,32 +105,17 @@ st.markdown("""
         color: #333;
         text-align: right;
         display: block;
-        margin-top: 5px; /* 버튼 높이와 맞추기 위함 */
+        margin-top: 5px;
     }
 
-    /* [모바일 강제 가로 정렬 핵심 코드] */
+    /* [모바일 강제 가로 정렬] */
     @media (max-width: 600px) {
         .title-text { font-size: 2rem; }
-        
-        /* 1. 컬럼이 세로로 쌓이는 것 방지 (가로 유지) */
-        [data-testid="stHorizontalBlock"] {
-            flex-wrap: nowrap !important;
-            min-width: 0 !important;
-        }
-        
-        /* 2. 각 컬럼의 최소 너비 해제 (좁아도 됨) */
-        [data-testid="column"] {
-            flex: 1 1 auto !important;
-            min-width: 0 !important;
-            padding: 0 1px !important;
-        }
-        
-        /* 3. 글자 크기 축소 (한 줄에 다 넣기 위해) */
+        [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 0 !important; }
+        [data-testid="column"] { flex: 1 1 auto !important; min-width: 0 !important; padding: 0 1px !important; }
         .list-header { font-size: 0.75rem !important; text-align: center; }
         div.stButton > button { font-size: 0.8rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .data-text { font-size: 0.75rem !important; margin-top: 2px; }
-        
-        /* 등락폭은 공간 부족하면 숨기거나 줄일 수 있음 (현재는 유지) */
     }
 
     /* 암호화폐/뉴스 스타일 */
@@ -313,7 +303,7 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     st.markdown("---")
     st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 종목명(이름)을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
     
-    # [리스트 헤더] - 가로 비율 설정 (모바일에서도 유지됨)
+    # [리스트 헤더]
     col_ratios = [1.6, 0.8, 0.8, 0.8]
     h1, h2, h3, h4 = st.columns(col_ratios)
     h1.markdown("<div class='list-header'>종목명</div>", unsafe_allow_html=True)
@@ -321,7 +311,7 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     h3.markdown("<div class='list-header' style='text-align:right'>등락률</div>", unsafe_allow_html=True)
     h4.markdown("<div class='list-header' style='text-align:right'>등락폭</div>", unsafe_allow_html=True)
 
-    # [리스트 본문] - 버튼 + CSS Hack 사용
+    # [리스트 본문]
     for item in market_items:
         price, rate, diff = 0, 0, 0
         try:
@@ -336,21 +326,28 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
         
-        # 선택된 항목인지 확인
+        # 선택 여부 확인
         is_selected = (st.session_state['selected_ticker'] == item['ticker'])
-        btn_label = f"✔ {item['name']}" if is_selected else item['name']
+        
+        # [핵심 디자인 변경]
+        if is_selected:
+            # 선택됨: 빨간색(:red) + 볼드체(**) + 포인트 라인(▍)
+            btn_label = f":red[**▍ {item['name']}**]"
+        else:
+            # 선택 안됨: 그냥 텍스트
+            btn_label = item['name']
         
         # 컬럼 생성
         c1, c2, c3, c4 = st.columns(col_ratios)
         
-        # 1열: 버튼 (투명하게 만들어서 텍스트처럼 보이게 함)
+        # 1열: 버튼 (이름 클릭용)
         with c1:
             if st.button(btn_label, key=f"btn_{item['ticker']}", use_container_width=True):
                 st.session_state['selected_ticker'] = item['ticker']
                 st.session_state['selected_name'] = item['name']
                 st.rerun()
         
-        # 2~4열: 단순 텍스트 (클릭 불가능, 정보 표시용)
+        # 2~4열: 데이터 텍스트
         with c2: st.markdown(f"<span class='data-text'>{price:,.2f}</span>", unsafe_allow_html=True)
         with c3: st.markdown(f"<span class='data-text' style='color:{color}'>{sign}{rate:.2f}%</span>", unsafe_allow_html=True)
         with c4: st.markdown(f"<span class='data-text' style='color:{color}'>{sign}{diff:,.2f}</span>", unsafe_allow_html=True)
