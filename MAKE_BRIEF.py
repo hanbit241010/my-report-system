@@ -20,47 +20,37 @@ if 'selected_name' not in st.session_state:
 st.markdown("""
     <style>
     /* -------------------------------------------------------------------
-       [1] 강력 숨김 모드 & 커스텀 하단 배너
+       [1] 강력 숨김 모드 & 커스텀 하단 배너 (왕관 가리기용)
     ------------------------------------------------------------------- */
     header[data-testid="stHeader"] { display: none !important; }
     footer { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
     
-    /* 기존 Manage App 버튼 등을 시각적으로 안보이게 처리 */
+    /* 기존 요소 투명화 */
     [data-testid="stManageAppButton"] { opacity: 0 !important; pointer-events: none !important; }
     .stAppDeployButton { display: none !important; }
     div[class*="stViewerBadge"] { display: none !important; }
 
-    /* [커스텀 하단 배너] 화면 맨 아래에 고정 */
+    /* [커스텀 하단 배너] z-index를 21억(최대치)으로 설정하여 무조건 덮음 */
     .custom-footer {
         position: fixed;
         bottom: 0;
         left: 0;
         width: 100%;
-        background-color: #ffffff; /* 배경색: 흰색 */
+        height: 60px; /* 배너 높이 고정 (왕관 가릴 만큼 충분히) */
+        background-color: #ffffff;
         border-top: 1px solid #e0e0e0;
-        padding: 10px 20px;
-        z-index: 999999; /* 제일 위에 뜨게 설정 */
+        padding: 0 20px;
+        z-index: 2147483647; /* 최상단 레이어 */
         display: flex;
         align-items: center;
         justify-content: space-between;
         box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
     }
-    .footer-content {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .footer-logo {
-        font-size: 1.2rem;
-        font-weight: 900;
-        color: #333;
-    }
-    .footer-sub {
-        font-size: 0.8rem;
-        color: #888;
-    }
+    .footer-content { display: flex; align-items: center; gap: 10px; }
+    .footer-logo { font-size: 1.1rem; font-weight: 900; color: #333; }
+    .footer-sub { font-size: 0.75rem; color: #888; margin-top: 2px;}
     .footer-btn {
         background-color: #d60000;
         color: white !important;
@@ -73,48 +63,45 @@ st.markdown("""
     }
     
     /* -------------------------------------------------------------------
-       [2] 칩(Chip) 스타일 (Radio 버튼을 칩처럼 꾸미기)
+       [2] 칩(Chip) 스타일 (자연스러운 줄바꿈 적용)
     ------------------------------------------------------------------- */
     div.row-widget.stRadio > div {
         flex-direction: row;
-        align-items: stretch;
-        overflow-x: auto; /* 가로 스크롤 가능 */
-        flex-wrap: nowrap; /* 줄바꿈 방지 */
-        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap !important; /* 화면 좁으면 자연스럽게 줄바꿈 */
+        gap: 8px;
         padding-bottom: 5px;
+        justify-content: flex-start; /* 왼쪽 정렬 */
     }
     div.row-widget.stRadio > div[role="radiogroup"] > label {
         background-color: #f0f2f6;
-        padding: 8px 16px;
-        border-radius: 20px;
+        padding: 6px 14px;
+        border-radius: 18px;
         border: 1px solid #ddd;
         cursor: pointer;
         transition: all 0.2s;
         margin-right: 0 !important;
-        min-width: fit-content;
+        font-size: 0.9rem;
     }
-    /* 선택된 칩 스타일 */
+    /* 선택된 칩 */
     div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
         background-color: #d60000 !important;
         color: white !important;
         border-color: #d60000 !important;
         font-weight: bold;
+        box-shadow: 0 2px 4px rgba(214,0,0,0.2);
     }
-    /* 라디오 버튼의 동그라미 숨기기 */
-    div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child {
-        display: none; 
-    }
-    div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child {
-        margin-left: 0px; 
-    }
+    /* 라디오 버튼 숨김 */
+    div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child { display: none; }
+    div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child { margin-left: 0px; }
 
     /* -------------------------------------------------------------------
-       [3] 기본 UI 스타일 (타이틀, 전광판, 표 등)
+       [3] 기본 UI 스타일
     ------------------------------------------------------------------- */
     .streamlit-expanderHeader p { font-size: 2.0rem !important; font-weight: 800 !important; color: #000 !important; }
-    
     .title-text { text-align: center; font-size: 2.5rem; font-weight: 800; margin-bottom: 10px; color: #000; }
     
+    /* 전광판 */
     .ticker-wrap { width: 100%; overflow: hidden; background-color: #f8f9fa; padding: 12px 0; margin-bottom: 20px; border-radius: 8px; white-space: nowrap; }
     .ticker-content { display: inline-block; animation: scroll 40s linear infinite; }
     .ticker-item { display: inline-block; padding: 0 2rem; font-size: 1.1rem; font-weight: bold; color: #333; }
@@ -122,28 +109,25 @@ st.markdown("""
     .up { color: #d60000; } .down { color: #0051c7; } 
 
     /* 테이블 스타일 */
-    .custom-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-family: 'sans-serif'; font-size: 0.9rem; }
+    .custom-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: 'sans-serif'; font-size: 0.9rem; }
     .custom-table th { border-bottom: 2px solid #333; padding: 10px 5px; text-align: right; color: #333; font-weight: bold; }
     .custom-table td { border-bottom: 1px solid #eee; padding: 12px 5px; text-align: right; color: #333; font-weight: 500; }
     .custom-table th:first-child, .custom-table td:first-child { text-align: left; }
     
-    /* 선택된 행 스타일 (포인트 라인 + 배경) */
+    /* 선택된 행 스타일 */
     .selected-row { background-color: #fff0f0; }
     .selected-text { color: #d60000; font-weight: 900; border-left: 4px solid #d60000; padding-left: 8px; }
 
-    /* 모바일 강제 가로 정렬 */
+    /* 모바일 대응 */
     @media (max-width: 600px) {
         .title-text { font-size: 2rem; }
         .custom-table th, .custom-table td { font-size: 0.75rem; padding: 10px 2px; }
         
-        /* 칩 버튼 크기 조절 */
-        div.row-widget.stRadio > div[role="radiogroup"] > label { padding: 6px 12px; font-size: 0.85rem; }
-        
-        /* 하단 배너 여백 확보를 위해 본문에 패딩 추가 */
-        .block-container { padding-bottom: 80px !important; }
+        /* 배너 때문에 가려지지 않게 여백 추가 */
+        .block-container { padding-bottom: 100px !important; }
     }
 
-    /* 카드 스타일 */
+    /* 카드 */
     .insight-box { background-color: #f8f9fa; border-radius: 10px; padding: 20px; text-align: center; border: 1px solid #eee; margin-bottom: 10px; }
     .insight-label { font-size: 1rem; color: #666; margin-bottom: 5px; }
     .insight-value { font-size: 2rem; font-weight: bold; color: #333; }
@@ -201,6 +185,7 @@ st.markdown(f"""<div class="ticker-wrap"><div class="ticker-content">{live_ticke
 # --- 함수 모음 ---
 def render_highchart_global(ticker, name, height=400):
     try:
+        # 금, 은, 오일의 경우 티커 심볼 처리
         df = yf.download(ticker, period="2y", interval="1d", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         df = df.reset_index()
@@ -210,8 +195,13 @@ def render_highchart_global(ticker, name, height=400):
             return
         for idx, row in df.iterrows():
             ts = int(row['Date'].timestamp() * 1000)
-            ohlc.append([ts, row['Open'], row['High'], row['Low'], row['Close']])
-            volume.append([ts, row['Volume'] if pd.notnull(row['Volume']) else 0])
+            op = float(row['Open']) if pd.notnull(row['Open']) else 0
+            hi = float(row['High']) if pd.notnull(row['High']) else 0
+            lo = float(row['Low']) if pd.notnull(row['Low']) else 0
+            cl = float(row['Close']) if pd.notnull(row['Close']) else 0
+            vo = int(row['Volume']) if pd.notnull(row['Volume']) else 0
+            ohlc.append([ts, op, hi, lo, cl])
+            volume.append([ts, vo])
         ohlc_json = json.dumps(ohlc)
         vol_json = json.dumps(volume)
         html_code = f"""
@@ -287,12 +277,15 @@ def get_crypto_insight():
         if btc * usd > 0: kimp = ((kor - (btc * usd)) / (btc * usd)) * 100
     except: pass
     try:
-        dom = requests.get("https://api.coingecko.com/api/v3/global", timeout=2).json()['data']['market_cap_percentage']['btc']
+        # CoinGecko 대신 CoinLore 사용 (무료 API 제한이 덜함)
+        res = requests.get("https://api.coinlore.net/api/global/", timeout=2).json()
+        dom = float(res[0]['btc_d'])
     except: pass
     return kimp, dom
 
 def get_crypto_news():
-    try: return feedparser.parse("https://news.google.com/rss/search?q=블록체인+OR+비트코인+when:1d&hl=ko&gl=KR&ceid=KR:ko").entries[:6]
+    # 블록미디어(BlockMedia) RSS - 네이버 코인뉴스 공급처, 링크 오류 없음
+    try: return feedparser.parse("https://www.blockmedia.co.kr/feed").entries[:6]
     except: return []
 
 def render_custom_metric(label, value, delta, pct):
@@ -306,26 +299,34 @@ def render_custom_metric(label, value, delta, pct):
 
 # --- 메인 컨텐츠 ---
 
+# [수정] 종목 7개로 확장 및 아이콘 변경 (4개/3개 배치)
 market_items = [
-    {"name": "비트코인", "ticker": "BTC-USD"},
-    {"name": "나스닥", "ticker": "^IXIC"},
-    {"name": "S&P 500", "ticker": "^GSPC"},
-    {"name": "다우존스", "ticker": "^DJI"},
-    {"name": "이더리움", "ticker": "ETH-USD"},
+    {"name": "🪙 비트코인", "ticker": "BTC-USD"},
+    {"name": "💲 나스닥", "ticker": "^IXIC"},
+    {"name": "📈 S&P 500", "ticker": "^GSPC"},
+    {"name": "🏛️ 다우존스", "ticker": "^DJI"},
+    {"name": "🟡 금", "ticker": "GC=F"},
+    {"name": "⚪ 은", "ticker": "SI=F"},
+    {"name": "⚫ 원유", "ticker": "CL=F"},
 ]
 
 # 1. 국제 증시
 with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     
-    # [1] 상단 칩(Chip) UI - (st.radio를 CSS로 변신시킴)
-    # 가로 스크롤 가능하며, 터치 시 버튼처럼 작동
+    # [1] 상단 칩(Chip) UI
     options = [item["name"] for item in market_items]
-    current_idx = options.index(st.session_state['selected_name']) if st.session_state['selected_name'] in options else 0
-    
+    # 이름 변경으로 인한 인덱스 재조정
+    current_name = st.session_state['selected_name']
+    # 기존 선택된 이름이 새 리스트에 없으면 기본값(비트코인)으로 리셋
+    if current_name not in options:
+         current_name = options[0]
+         st.session_state['selected_name'] = current_name
+         st.session_state['selected_ticker'] = market_items[0]['ticker']
+
     selected_chip = st.radio(
         "차트 선택",
         options,
-        index=current_idx,
+        index=options.index(current_name),
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -342,7 +343,11 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     st.info(f"📊 현재 차트: **{st.session_state['selected_name']}**")
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
     
-    # [3] 시세 리스트 (HTML 테이블 + 선택된 행 강조)
+    # 간격 조절
+    st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 위 버튼을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
+    
+    # [3] 시세 리스트
     html_rows = ""
     for item in market_items:
         price, rate, diff = 0, 0, 0
@@ -358,10 +363,9 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
         
-        # [핵심] 선택된 행 스타일링
+        # 선택된 행 스타일링
         if st.session_state['selected_ticker'] == item['ticker']:
             row_class = "selected-row"
-            # 종목명에 포인트 라인과 색상 적용
             name_cell = f"<span class='selected-text'>{item['name']}</span>"
         else:
             row_class = ""
@@ -399,7 +403,7 @@ with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
     with ic2:
         st.markdown(f"""<div class="insight-box"><div class="insight-label">비트코인 점유율 (BTC Dominance)</div><div class="insight-value" style="color: #f7931a;">{dom:.1f}%</div><div class="insight-sub">전체 코인 시장 중 BTC 비중</div></div>""", unsafe_allow_html=True)
     st.markdown("---")
-    st.subheader("📰 주요 블록체인 뉴스")
+    st.subheader("📰 주요 코인 뉴스 (BlockMedia)")
     for i in range(0, len(news_list), 2):
         nc = st.columns(2)
         for j in range(2):
@@ -443,8 +447,7 @@ with st.expander("📈 국내 증시 (Domestic Market)", expanded=False):
     st.subheader("KOSDAQ Market Trend")
     render_highchart_domestic('KQ11', 'KOSDAQ', height=400)
 
-# [하단 커스텀 배너] - Streamlit Footer 가리기용
-# 이미지, 텍스트, 링크 수정하는 곳
+# [하단 커스텀 배너] - Streamlit Footer 가리기용 (높이 60px)
 st.markdown("""
 <div class="custom-footer">
     <div class="footer-content">
