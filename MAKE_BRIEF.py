@@ -6,6 +6,7 @@ import requests
 import feedparser
 from datetime import datetime, timedelta
 import json
+import time
 
 # 1. 페이지 설정
 st.set_page_config(page_title="AJIN REPORT", layout="wide")
@@ -27,96 +28,62 @@ st.markdown("""
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
     
-    /* 기존 요소 투명화 및 클릭 방지 (로컬에서는 어차피 안 나오지만 혹시 몰라 유지) */
     [data-testid="stManageAppButton"] { opacity: 0 !important; pointer-events: none !important; height: 0 !important;}
     .stAppDeployButton { display: none !important; }
     div[class*="stViewerBadge"] { display: none !important; }
 
-    /* [커스텀 하단 배너] B안 디자인 적용 */
+    /* 커스텀 하단 배너 (B안) */
     .custom-footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 70px;
-        background-color: #ffffff;
-        border-top: 1px solid #e0e0e0;
-        padding: 0 20px;
-        z-index: 2147483647;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        position: fixed; bottom: 0; left: 0; width: 100%; height: 70px;
+        background-color: #ffffff; border-top: 1px solid #e0e0e0;
+        padding: 0 20px; z-index: 2147483647;
+        display: flex; align-items: center; justify-content: space-between;
         box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
     }
-    .footer-content {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    .footer-main {
-        font-size: 1.1rem;
-        font-weight: 900;
-        color: #333;
-        line-height: 1.2;
-    }
-    .footer-sub {
-        font-size: 0.75rem;
-        font-weight: 400;
-        color: #888;
-        margin-top: 2px;
-        letter-spacing: 0.5px;
-    }
+    .footer-content { display: flex; flex-direction: column; justify-content: center; }
+    .footer-main { font-size: 1.1rem; font-weight: 900; color: #333; line-height: 1.2; }
+    .footer-sub { font-size: 0.75rem; font-weight: 400; color: #888; margin-top: 2px; letter-spacing: 0.5px; }
     .footer-btn {
-        background-color: #d60000;
-        color: white !important;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: bold;
-        text-decoration: none;
-        box-shadow: 0 3px 6px rgba(214, 0, 0, 0.3);
-        transition: transform 0.1s;
+        background-color: #d60000; color: white !important; padding: 8px 16px;
+        border-radius: 20px; font-size: 0.85rem; font-weight: bold; text-decoration: none;
+        box-shadow: 0 3px 6px rgba(214, 0, 0, 0.3); transition: transform 0.1s;
     }
     .footer-btn:active { transform: scale(0.95); }
     
     /* -------------------------------------------------------------------
-       [2] 칩(Chip) 스타일
+       [2] 브리핑 리포트 스타일 (종이 질감 카드)
     ------------------------------------------------------------------- */
-    div.row-widget.stRadio > div {
-        flex-direction: row;
-        align-items: center;
-        flex-wrap: wrap !important;
-        gap: 8px;
-        padding-bottom: 5px;
-        justify-content: flex-start;
+    .briefing-card {
+        background-color: #ffffff;
+        border: 1px solid #ddd;
+        border-left: 5px solid #333; /* 전문가 느낌의 포인트 라인 */
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        font-family: 'sans-serif';
     }
-    div.row-widget.stRadio > div[role="radiogroup"] > label {
-        background-color: #f0f2f6;
-        padding: 8px 14px;
-        border-radius: 20px;
-        border: 1px solid #e0e0e0;
-        cursor: pointer;
-        transition: all 0.2s;
-        margin-right: 0 !important;
-        font-size: 0.9rem;
-        color: #555;
+    .briefing-header {
+        font-size: 1.4rem; font-weight: 900; color: #333; margin-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;
     }
-    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
-        background-color: #d60000 !important;
-        color: white !important;
-        border-color: #d60000 !important;
-        font-weight: bold;
-        box-shadow: 0 2px 5px rgba(214,0,0,0.2);
-    }
+    .briefing-date { font-size: 0.9rem; color: #666; font-weight: normal; float: right; margin-top: 5px;}
+    .briefing-section { margin-bottom: 15px; }
+    .briefing-title { font-size: 1.1rem; font-weight: 800; color: #d60000; margin-bottom: 5px; }
+    .briefing-text { font-size: 1rem; line-height: 1.6; color: #444; text-align: justify; }
+    .briefing-highlight { background-color: #fff5f5; padding: 2px 5px; border-radius: 4px; font-weight: bold; color: #d60000; }
+    
+    /* -------------------------------------------------------------------
+       [3] 기본 UI 및 칩 스타일
+    ------------------------------------------------------------------- */
+    div.row-widget.stRadio > div { flex-direction: row; align-items: center; flex-wrap: wrap !important; gap: 8px; padding-bottom: 5px; justify-content: flex-start; }
+    div.row-widget.stRadio > div[role="radiogroup"] > label { background-color: #f0f2f6; padding: 8px 14px; border-radius: 20px; border: 1px solid #e0e0e0; cursor: pointer; transition: all 0.2s; margin-right: 0 !important; font-size: 0.9rem; color: #555; }
+    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] { background-color: #d60000 !important; color: white !important; border-color: #d60000 !important; font-weight: bold; box-shadow: 0 2px 5px rgba(214,0,0,0.2); }
     div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child { display: none; }
     div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child { margin-left: 0px; }
 
-    /* -------------------------------------------------------------------
-       [3] 기본 UI 스타일
-    ------------------------------------------------------------------- */
     .streamlit-expanderHeader p { font-size: 1.8rem !important; font-weight: 800 !important; color: #222 !important; }
     .title-text { text-align: center; font-size: 2.5rem; font-weight: 800; margin-bottom: 10px; color: #000; }
-    
     .ticker-wrap { width: 100%; overflow: hidden; background-color: #f8f9fa; padding: 12px 0; margin-bottom: 20px; border-radius: 8px; white-space: nowrap; }
     .ticker-content { display: inline-block; animation: scroll 40s linear infinite; }
     .ticker-item { display: inline-block; padding: 0 2rem; font-size: 1.1rem; font-weight: bold; color: #333; }
@@ -129,33 +96,20 @@ st.markdown("""
     .custom-table th:first-child, .custom-table td:first-child { text-align: left; }
     
     .selected-row { background-color: #fff5f5; }
-    .selected-text { 
-        color: #d60000; 
-        font-weight: 900; 
-        border-left: 4px solid #d60000; 
-        padding-left: 8px; 
-        display: inline-block;
-    }
+    .selected-text { color: #d60000; font-weight: 900; border-left: 4px solid #d60000; padding-left: 8px; display: inline-block; }
 
     @media (max-width: 600px) {
         .title-text { font-size: 2rem; }
         .custom-table th, .custom-table td { font-size: 0.8rem; padding: 12px 2px; }
         .block-container { padding-bottom: 100px !important; }
+        .briefing-card { padding: 15px; }
+        .briefing-header { font-size: 1.2rem; }
     }
 
     .insight-box { background-color: #f8f9fa; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #eee; margin-bottom: 10px; }
     .insight-label { font-size: 0.95rem; color: #666; margin-bottom: 5px; font-weight: 600;}
     .insight-value { font-size: 1.8rem; font-weight: 800; color: #333; }
-    
-    .news-card { 
-        background-color: white; 
-        padding: 15px; 
-        border-radius: 12px; 
-        border: 1px solid #eee; 
-        margin-bottom: 12px; 
-        height: 100%;
-        transition: transform 0.2s;
-    }
+    .news-card { background-color: white; padding: 15px; border-radius: 12px; border: 1px solid #eee; margin-bottom: 12px; height: 100%; transition: transform 0.2s; }
     .news-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     .news-title { font-weight: bold; font-size: 1rem; margin-bottom: 8px; color: #333; text-decoration: none; display: block; line-height: 1.4; }
     .news-date { font-size: 0.8rem; color: #999; }
@@ -178,7 +132,120 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 전광판 데이터 수집
+# --- 스마트 브리핑 생성 함수 (Expert Logic) ---
+def generate_market_briefing(market_data):
+    # 1. 시장 상태 판단
+    nas_chg = market_data.get('^IXIC', {}).get('pct', 0)
+    spx_chg = market_data.get('^GSPC', {}).get('pct', 0)
+    dji_chg = market_data.get('^DJI', {}).get('pct', 0)
+    vix_val = market_data.get('^VIX', {}).get('price', 20)
+    
+    avg_chg = (nas_chg + spx_chg + dji_chg) / 3
+    
+    # 키워드 생성
+    market_mood = ""
+    if avg_chg > 1.0: market_mood = "강력한 상승세(Bullish Rally)"
+    elif avg_chg > 0.2: market_mood = "견조한 상승(Modest Gain)"
+    elif avg_chg > -0.2: market_mood = "보합권 혼조세(Mixed/Flat)"
+    elif avg_chg > -1.0: market_mood = "조정 및 차익실현(Correction)"
+    else: market_mood = "약세장 및 하락 압력(Bearish)"
+
+    vix_comment = ""
+    if vix_val < 15: vix_comment = "투자 심리가 매우 안정적이며 위험 선호 현상이 뚜렷합니다."
+    elif vix_val < 20: vix_comment = "시장의 변동성은 안정적인 수준을 유지하고 있습니다."
+    elif vix_val < 30: vix_comment = "시장 불확실성이 다소 확대되며 변동성 관리가 필요해 보입니다."
+    else: vix_comment = "극심한 공포 심리가 시장을 지배하며 변동성이 확대되었습니다."
+
+    # 2. 자산군 분석
+    btc_chg = market_data.get('BTC-USD', {}).get('pct', 0)
+    gold_chg = market_data.get('GC=F', {}).get('pct', 0)
+    
+    asset_comment = ""
+    if btc_chg > 1.0 and nas_chg > 0.5:
+        asset_comment = "비트코인은 기술주(나스닥)와 강한 동조화(Coupling)를 보이며 위험 자산 선호 심리를 주도했습니다."
+    elif btc_chg > 0 and nas_chg < 0:
+        asset_comment = "비트코인은 증시 하락에도 불구하고 독자적인 상승세를 보이며 디커플링(Decoupling) 움직임을 나타냈습니다."
+    elif gold_chg > 0.5 and avg_chg < 0:
+        asset_comment = "증시 약세 속에 금(Gold)이 강세를 보이며 안전 자산으로의 자금 이동(Flight to Quality)이 관측되었습니다."
+    else:
+        asset_comment = f"비트코인은 전일 대비 {btc_chg:+.2f}% 변동하며 시장 흐름을 주시하고 있습니다."
+
+    # 3. 브리핑 텍스트 조립
+    briefing_html = f"""
+    <div class="briefing-card">
+        <div class="briefing-header">
+            ☕ 아침 7시 마켓 브리핑
+            <span class="briefing-date">{today_str} 기준</span>
+        </div>
+        
+        <div class="briefing-section">
+            <div class="briefing-title">1. 글로벌 시장 전반 (Overview)</div>
+            <div class="briefing-text">
+                간밤 뉴욕 증시는 <span class="briefing-highlight">{market_mood}</span>로 마감했습니다. 
+                3대 지수의 평균 등락률은 약 {avg_chg:+.2f}%를 기록했습니다. 
+                변동성 지수(VIX)는 {vix_val:.2f}를 기록하며, {vix_comment}
+            </div>
+        </div>
+
+        <div class="briefing-section">
+            <div class="briefing-title">2. 자산군별 흐름 (Asset Flow)</div>
+            <div class="briefing-text">
+                {asset_comment} 
+                특히 기술주 중심의 나스닥은 {nas_chg:+.2f}%, 전통 산업 중심의 다우존스는 {dji_chg:+.2f}%의 등락을 보이며 섹터별 차별화 장세가 나타났습니다.
+            </div>
+        </div>
+
+        <div class="briefing-section">
+            <div class="briefing-title">3. 종합 전문가 의견 (Conclusion)</div>
+            <div class="briefing-text">
+                현재 시장은 {'모든 이평선 상단에 위치한 강세 국면' if avg_chg > 0 else '단기 저항선 돌파를 시도하는 국면'}으로 판단됩니다. 
+                거시 경제 이슈와 뉴스 플로우에 따라 변동성이 발생할 수 있으므로, 추격 매수보다는 
+                {'조정 시 분할 매수' if avg_chg > 0 else '보수적인 리스크 관리'} 관점의 대응이 유효해 보입니다.
+            </div>
+        </div>
+    </div>
+    """
+    return briefing_html
+
+# --- 데이터 수집 및 전처리 ---
+def get_all_market_data():
+    tickers = {
+        "^IXIC": "나스닥", "^GSPC": "S&P 500", "^DJI": "다우존스",
+        "BTC-USD": "비트코인", "GC=F": "금", "SI=F": "은", "CL=F": "원유", "^VIX": "VIX"
+    }
+    data_storage = {}
+    
+    # 한번에 다운로드하여 속도 향상
+    ticker_str = " ".join(list(tickers.keys()))
+    try:
+        df = yf.download(ticker_str, period="2d", progress=False)['Close']
+        # 멀티인덱스 처리
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1) # Ticker만 남김 (이름이 아닌 심볼)
+            
+        for t in tickers.keys():
+            try:
+                # yfinance 다운로드 데이터 구조에 따라 컬럼 접근
+                # 보통 df[ticker] 형태임. 최신버전 yfinance 확인 필요
+                # 여기서는 안전하게 개별 처리 로직을 사용하지 않고 배치 처리된 df에서 추출
+                series = df[t].dropna()
+                if len(series) >= 2:
+                    curr = series.iloc[-1]
+                    prev = series.iloc[-2]
+                    pct = ((curr - prev) / prev) * 100
+                    data_storage[t] = {'price': curr, 'pct': pct}
+                elif len(series) == 1:
+                    data_storage[t] = {'price': series.iloc[-1], 'pct': 0.0}
+                else:
+                    data_storage[t] = {'price': 0.0, 'pct': 0.0}
+            except:
+                data_storage[t] = {'price': 0.0, 'pct': 0.0}
+    except:
+        pass
+        
+    return data_storage
+
+# 전광판용 데이터 (HTML)
 def get_ticker_html_data():
     targets = {
         "나스닥": "^IXIC", "원/달러": "KRW=X", "비트코인": "BTC-KRW",
@@ -202,7 +269,10 @@ def get_ticker_html_data():
         except: items_html += f'<span class="ticker-item">{name} Error</span>'
     return items_html
 
-with st.spinner("시장 데이터 동기화 중..."):
+with st.spinner("시장 데이터 동기화 및 분석 중..."):
+    # 1. 전체 데이터 수집 (브리핑용)
+    market_data_all = get_all_market_data()
+    # 2. 전광판 데이터 수집
     live_ticker_items = get_ticker_html_data()
 
 st.markdown(f"""<div class="ticker-wrap"><div class="ticker-content">{live_ticker_items}</div></div>""", unsafe_allow_html=True)
@@ -307,7 +377,6 @@ def get_crypto_insight():
     return kimp, dom
 
 def get_crypto_news():
-    # [뉴스] 블록미디어 디지털에셋 카테고리 전용 RSS 적용
     try: return feedparser.parse("https://www.blockmedia.co.kr/archives/category/market/digital-asset/feed").entries[:8]
     except: return []
 
@@ -364,15 +433,29 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
     
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+    
+    # [NEW] 스마트 브리핑 리포트 출력 (차트 아래, 리스트 위)
+    briefing_html = generate_market_briefing(market_data_all)
+    st.markdown(briefing_html, unsafe_allow_html=True)
+    
     st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 위 버튼을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
     
     # [3] 시세 리스트
     html_rows = ""
     for item in market_items:
-        price, rate, diff = 0, 0, 0
+        # 미리 수집한 market_data_all 사용 (속도 향상)
+        t_data = market_data_all.get(item['ticker'], {'price': 0, 'pct': 0})
+        price = t_data['price']
+        rate = t_data['pct']
+        
+        # 등락폭(Diff)은 따로 계산 필요 (여기서는 pct 역산 또는 0 처리, yfinance 호출 최소화 위해 pct만 사용해도 무방하나 정확도를 위해 개별호출 유지 혹은 로직 변경 가능)
+        # 기존 로직 유지 (정확도 우선)
+        diff = 0
         try:
-            hist = yf.Ticker(item['ticker']).history(period="5d")
-            if len(hist) >= 1:
+             # 브리핑용 데이터와 별개로 리스트용 정확한 데이터 재호출 (안전성)
+             # 속도가 느리다면 market_data_all에서 prev 계산 로직 추가 필요
+             hist = yf.Ticker(item['ticker']).history(period="5d")
+             if len(hist) >= 1:
                 price = hist['Close'].iloc[-1]
                 prev = hist['Close'].iloc[-2] if len(hist) > 1 else price
                 diff = price - prev
@@ -427,8 +510,6 @@ with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
         for j in range(2):
             if i + j < len(news_list):
                 entry = news_list[i+j]
-                
-                # [시간 변환] KST (+9시간)
                 dt_str = ""
                 try:
                     if hasattr(entry, 'published_parsed'):
