@@ -16,22 +16,31 @@ if 'selected_ticker' not in st.session_state:
 if 'selected_name' not in st.session_state:
     st.session_state['selected_name'] = '비트코인'
 
-# 3. 스타일(CSS) 정의 - [Manage App 숨김 코드 추가됨]
+# 3. 스타일(CSS) 정의
 st.markdown("""
     <style>
-    /* [기본] 헤더/푸터/배포버튼/왕관 등 불필요한 요소 전멸시키기 */
-    header[data-testid="stHeader"] { display: none !important; }
-    footer { display: none !important; }
-    .stDeployButton { display: none !important; }
-    [data-testid="stToolbar"] { display: none !important; }
-    [data-testid="stDecoration"] { display: none !important; }
-    [data-testid="stStatusWidget"] { display: none !important; }
-    .stAppDeployButton { display: none !important; }
+    /* -------------------------------------------------------------------
+       [강력 숨김 모드] 
+       헤더, 푸터, 툴바, 매니지 버튼, 배포 버튼 등 모든 관리자 메뉴 제거 
+    ------------------------------------------------------------------- */
+    header[data-testid="stHeader"] { display: none !important; visibility: hidden !important; }
+    footer { display: none !important; visibility: hidden !important; }
     
-    /* [추가] 우측 하단 Manage app 버튼 및 뷰어 배지 숨김 */
+    /* 우측 상단 햄버거 메뉴(...) 및 툴바 전체 숨김 */
+    [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
+    [data-testid="stHeader"] { display: none !important; }
+    
+    /* 우측 하단 Manage App 버튼 숨김 */
     [data-testid="stManageAppButton"] { display: none !important; }
+    .stAppDeployButton { display: none !important; }
     div[class*="stViewerBadge"] { display: none !important; }
     
+    /* 기타 장식 요소 숨김 */
+    [data-testid="stDecoration"] { display: none !important; }
+    [data-testid="stStatusWidget"] { display: none !important; }
+    
+    /* ------------------------------------------------------------------- */
+
     /* [폰트] 섹션 헤더(Expander Title) 확대 */
     .streamlit-expanderHeader p {
         font-size: 2.0rem !important;
@@ -56,7 +65,7 @@ st.markdown("""
     .up { color: #d60000; } 
     .down { color: #0051c7; } 
 
-    /* [테이블 스타일] 모바일/PC 공용 */
+    /* [테이블 스타일] */
     .custom-table {
         width: 100%;
         border-collapse: collapse;
@@ -84,7 +93,7 @@ st.markdown("""
     }
     /* 선택된 행 하이라이트 */
     .selected-row {
-        background-color: #f0f8ff;
+        background-color: #e3f2fd; /* 선택된 항목 파란색 배경 */
         font-weight: bold;
     }
 
@@ -269,11 +278,19 @@ market_items = [
 
 # 1. 국제 증시
 with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
-    # [1] 차트 선택
+    # [1] 차트 종목 선택 (Selectbox 사용 - 모바일 최적화)
     options = [item["name"] for item in market_items]
     current_idx = options.index(st.session_state['selected_name']) if st.session_state['selected_name'] in options else 0
-    selected_option = st.selectbox("📊 차트 종목 선택", options, index=current_idx)
     
+    st.markdown("##### 📌 차트 종목 선택 (Select Chart)") # 안내 문구 추가
+    selected_option = st.selectbox(
+        label="차트 종목 선택", # 라벨 숨김 처리됨 (위 마크다운으로 대체)
+        options=options, 
+        index=current_idx,
+        label_visibility="collapsed"
+    )
+    
+    # 선택값이 바뀌면 상태 업데이트 및 리런
     if selected_option != st.session_state['selected_name']:
         st.session_state['selected_name'] = selected_option
         for item in market_items:
@@ -282,11 +299,11 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
                 st.rerun()
 
     # [2] 차트 렌더링
-    st.info(f"📈 현재 차트: **{st.session_state['selected_name']}**")
+    st.info(f"📊 현재 차트: **{st.session_state['selected_name']}**")
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
     st.markdown("---")
     
-    # [3] 시세 리스트 (HTML 표 깨짐 수정 완료)
+    # [3] 시세 리스트 (보기 전용 표)
     html_rows = ""
     for item in market_items:
         price, rate, diff = 0, 0, 0
@@ -301,9 +318,10 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
+        
+        # 선택된 종목은 배경색으로 표시
         row_class = "selected-row" if st.session_state['selected_ticker'] == item['ticker'] else ""
         
-        # HTML 조립
         html_rows += f"<tr class='{row_class}'><td>{item['name']}</td><td>{price:,.2f}</td><td style='color:{color}'>{sign}{rate:.2f}%</td><td style='color:{color}'>{sign}{diff:,.2f}</td></tr>"
 
     full_table_html = f"""
