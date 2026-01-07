@@ -16,7 +16,7 @@ if 'selected_ticker' not in st.session_state:
 if 'selected_name' not in st.session_state:
     st.session_state['selected_name'] = '비트코인'
 
-# 3. 스타일(CSS) 정의
+# 3. 스타일(CSS) 정의 - [Manage App 숨김 코드 추가됨]
 st.markdown("""
     <style>
     /* [기본] 헤더/푸터/배포버튼/왕관 등 불필요한 요소 전멸시키기 */
@@ -26,7 +26,11 @@ st.markdown("""
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
-    .stAppDeployButton { display: none !important; } 
+    .stAppDeployButton { display: none !important; }
+    
+    /* [추가] 우측 하단 Manage app 버튼 및 뷰어 배지 숨김 */
+    [data-testid="stManageAppButton"] { display: none !important; }
+    div[class*="stViewerBadge"] { display: none !important; }
     
     /* [폰트] 섹션 헤더(Expander Title) 확대 */
     .streamlit-expanderHeader p {
@@ -299,10 +303,9 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         sign = "+" if diff >= 0 else ""
         row_class = "selected-row" if st.session_state['selected_ticker'] == item['ticker'] else ""
         
-        # 여기서 f-string 안에 들여쓰기를 없애고 한 줄로 붙여야 HTML로 인식됩니다.
+        # HTML 조립
         html_rows += f"<tr class='{row_class}'><td>{item['name']}</td><td>{price:,.2f}</td><td style='color:{color}'>{sign}{rate:.2f}%</td><td style='color:{color}'>{sign}{diff:,.2f}</td></tr>"
 
-    # 테이블 전체 HTML 조립
     full_table_html = f"""
     <table class="custom-table">
         <thead>
