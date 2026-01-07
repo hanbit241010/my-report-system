@@ -51,27 +51,29 @@ st.markdown("""
     .footer-btn:active { transform: scale(0.95); }
     
     /* -------------------------------------------------------------------
-       [2] 브리핑 리포트 스타일 (종이 질감 카드)
+       [2] 브리핑 리포트 스타일 (HTML 깨짐 방지용 단순화)
     ------------------------------------------------------------------- */
     .briefing-card {
         background-color: #ffffff;
         border: 1px solid #ddd;
-        border-left: 5px solid #333; /* 전문가 느낌의 포인트 라인 */
+        border-left: 5px solid #333;
         border-radius: 8px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        padding: 20px;
+        margin-top: 30px; /* 표와의 간격 */
+        margin-bottom: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         font-family: 'sans-serif';
     }
     .briefing-header {
-        font-size: 1.4rem; font-weight: 900; color: #333; margin-bottom: 10px;
+        font-size: 1.3rem; font-weight: 900; color: #333; margin-bottom: 15px;
         border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;
+        display: flex; justify-content: space-between; align-items: center;
     }
-    .briefing-date { font-size: 0.9rem; color: #666; font-weight: normal; float: right; margin-top: 5px;}
-    .briefing-section { margin-bottom: 15px; }
-    .briefing-title { font-size: 1.1rem; font-weight: 800; color: #d60000; margin-bottom: 5px; }
-    .briefing-text { font-size: 1rem; line-height: 1.6; color: #444; text-align: justify; }
-    .briefing-highlight { background-color: #fff5f5; padding: 2px 5px; border-radius: 4px; font-weight: bold; color: #d60000; }
+    .briefing-date { font-size: 0.85rem; color: #888; font-weight: normal; }
+    .briefing-section { margin-bottom: 20px; }
+    .briefing-title { font-size: 1.05rem; font-weight: 800; color: #d60000; margin-bottom: 8px; }
+    .briefing-text { font-size: 0.95rem; line-height: 1.6; color: #444; }
+    .briefing-highlight { background-color: #fff5f5; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: #d60000; }
     
     /* -------------------------------------------------------------------
        [3] 기본 UI 및 칩 스타일
@@ -102,8 +104,7 @@ st.markdown("""
         .title-text { font-size: 2rem; }
         .custom-table th, .custom-table td { font-size: 0.8rem; padding: 12px 2px; }
         .block-container { padding-bottom: 100px !important; }
-        .briefing-card { padding: 15px; }
-        .briefing-header { font-size: 1.2rem; }
+        .briefing-card { padding: 15px; margin-top: 20px; }
     }
 
     .insight-box { background-color: #f8f9fa; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #eee; margin-bottom: 10px; }
@@ -134,7 +135,7 @@ st.markdown(f"""
 
 # --- 스마트 브리핑 생성 함수 (Expert Logic) ---
 def generate_market_briefing(market_data):
-    # 1. 시장 상태 판단
+    # 데이터 추출
     nas_chg = market_data.get('^IXIC', {}).get('pct', 0)
     spx_chg = market_data.get('^GSPC', {}).get('pct', 0)
     dji_chg = market_data.get('^DJI', {}).get('pct', 0)
@@ -156,7 +157,7 @@ def generate_market_briefing(market_data):
     elif vix_val < 30: vix_comment = "시장 불확실성이 다소 확대되며 변동성 관리가 필요해 보입니다."
     else: vix_comment = "극심한 공포 심리가 시장을 지배하며 변동성이 확대되었습니다."
 
-    # 2. 자산군 분석
+    # 자산군 분석
     btc_chg = market_data.get('BTC-USD', {}).get('pct', 0)
     gold_chg = market_data.get('GC=F', {}).get('pct', 0)
     
@@ -169,43 +170,30 @@ def generate_market_briefing(market_data):
         asset_comment = "증시 약세 속에 금(Gold)이 강세를 보이며 안전 자산으로의 자금 이동(Flight to Quality)이 관측되었습니다."
     else:
         asset_comment = f"비트코인은 전일 대비 {btc_chg:+.2f}% 변동하며 시장 흐름을 주시하고 있습니다."
+    
+    # 조언
+    advice = '모든 이평선 상단에 위치한 강세 국면' if avg_chg > 0 else '단기 저항선 돌파를 시도하는 국면'
+    action = '조정 시 분할 매수' if avg_chg > 0 else '보수적인 리스크 관리'
 
-    # 3. 브리핑 텍스트 조립
-    briefing_html = f"""
-    <div class="briefing-card">
-        <div class="briefing-header">
-            ☕ 아침 7시 마켓 브리핑
-            <span class="briefing-date">{today_str} 기준</span>
-        </div>
-        
-        <div class="briefing-section">
-            <div class="briefing-title">1. 글로벌 시장 전반 (Overview)</div>
-            <div class="briefing-text">
-                간밤 뉴욕 증시는 <span class="briefing-highlight">{market_mood}</span>로 마감했습니다. 
-                3대 지수의 평균 등락률은 약 {avg_chg:+.2f}%를 기록했습니다. 
-                변동성 지수(VIX)는 {vix_val:.2f}를 기록하며, {vix_comment}
-            </div>
-        </div>
-
-        <div class="briefing-section">
-            <div class="briefing-title">2. 자산군별 흐름 (Asset Flow)</div>
-            <div class="briefing-text">
-                {asset_comment} 
-                특히 기술주 중심의 나스닥은 {nas_chg:+.2f}%, 전통 산업 중심의 다우존스는 {dji_chg:+.2f}%의 등락을 보이며 섹터별 차별화 장세가 나타났습니다.
-            </div>
-        </div>
-
-        <div class="briefing-section">
-            <div class="briefing-title">3. 종합 전문가 의견 (Conclusion)</div>
-            <div class="briefing-text">
-                현재 시장은 {'모든 이평선 상단에 위치한 강세 국면' if avg_chg > 0 else '단기 저항선 돌파를 시도하는 국면'}으로 판단됩니다. 
-                거시 경제 이슈와 뉴스 플로우에 따라 변동성이 발생할 수 있으므로, 추격 매수보다는 
-                {'조정 시 분할 매수' if avg_chg > 0 else '보수적인 리스크 관리'} 관점의 대응이 유효해 보입니다.
-            </div>
-        </div>
-    </div>
-    """
-    return briefing_html
+    # [중요] HTML 들여쓰기 제거 (한 줄로 작성하거나 들여쓰기 없이 붙여야 함)
+    html_code = f"""
+<div class="briefing-card">
+<div class="briefing-header">☕ 아침 7시 마켓 브리핑<span class="briefing-date">{today_str} 기준</span></div>
+<div class="briefing-section">
+<div class="briefing-title">1. 글로벌 시장 전반 (Overview)</div>
+<div class="briefing-text">간밤 뉴욕 증시는 <span class="briefing-highlight">{market_mood}</span>로 마감했습니다. 3대 지수의 평균 등락률은 약 {avg_chg:+.2f}%를 기록했습니다. 변동성 지수(VIX)는 {vix_val:.2f}를 기록하며, {vix_comment}</div>
+</div>
+<div class="briefing-section">
+<div class="briefing-title">2. 자산군별 흐름 (Asset Flow)</div>
+<div class="briefing-text">{asset_comment} 특히 기술주 중심의 나스닥은 {nas_chg:+.2f}%, 전통 산업 중심의 다우존스는 {dji_chg:+.2f}%의 등락을 보이며 섹터별 차별화 장세가 나타났습니다.</div>
+</div>
+<div class="briefing-section">
+<div class="briefing-title">3. 종합 전문가 의견 (Conclusion)</div>
+<div class="briefing-text">현재 시장은 {advice}으로 판단됩니다. 거시 경제 이슈와 뉴스 플로우에 따라 변동성이 발생할 수 있으므로, 추격 매수보다는 {action} 관점의 대응이 유효해 보입니다.</div>
+</div>
+</div>
+"""
+    return html_code
 
 # --- 데이터 수집 및 전처리 ---
 def get_all_market_data():
@@ -214,20 +202,13 @@ def get_all_market_data():
         "BTC-USD": "비트코인", "GC=F": "금", "SI=F": "은", "CL=F": "원유", "^VIX": "VIX"
     }
     data_storage = {}
-    
-    # 한번에 다운로드하여 속도 향상
     ticker_str = " ".join(list(tickers.keys()))
     try:
         df = yf.download(ticker_str, period="2d", progress=False)['Close']
-        # 멀티인덱스 처리
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1) # Ticker만 남김 (이름이 아닌 심볼)
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
             
         for t in tickers.keys():
             try:
-                # yfinance 다운로드 데이터 구조에 따라 컬럼 접근
-                # 보통 df[ticker] 형태임. 최신버전 yfinance 확인 필요
-                # 여기서는 안전하게 개별 처리 로직을 사용하지 않고 배치 처리된 df에서 추출
                 series = df[t].dropna()
                 if len(series) >= 2:
                     curr = series.iloc[-1]
@@ -240,9 +221,7 @@ def get_all_market_data():
                     data_storage[t] = {'price': 0.0, 'pct': 0.0}
             except:
                 data_storage[t] = {'price': 0.0, 'pct': 0.0}
-    except:
-        pass
-        
+    except: pass
     return data_storage
 
 # 전광판용 데이터 (HTML)
@@ -270,9 +249,7 @@ def get_ticker_html_data():
     return items_html
 
 with st.spinner("시장 데이터 동기화 및 분석 중..."):
-    # 1. 전체 데이터 수집 (브리핑용)
     market_data_all = get_all_market_data()
-    # 2. 전광판 데이터 수집
     live_ticker_items = get_ticker_html_data()
 
 st.markdown(f"""<div class="ticker-wrap"><div class="ticker-content">{live_ticker_items}</div></div>""", unsafe_allow_html=True)
@@ -433,27 +410,17 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
     
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
-    
-    # [NEW] 스마트 브리핑 리포트 출력 (차트 아래, 리스트 위)
-    briefing_html = generate_market_briefing(market_data_all)
-    st.markdown(briefing_html, unsafe_allow_html=True)
-    
     st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 위 버튼을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
     
-    # [3] 시세 리스트
+    # [3] 시세 리스트 (먼저 출력)
     html_rows = ""
     for item in market_items:
-        # 미리 수집한 market_data_all 사용 (속도 향상)
         t_data = market_data_all.get(item['ticker'], {'price': 0, 'pct': 0})
         price = t_data['price']
         rate = t_data['pct']
         
-        # 등락폭(Diff)은 따로 계산 필요 (여기서는 pct 역산 또는 0 처리, yfinance 호출 최소화 위해 pct만 사용해도 무방하나 정확도를 위해 개별호출 유지 혹은 로직 변경 가능)
-        # 기존 로직 유지 (정확도 우선)
         diff = 0
         try:
-             # 브리핑용 데이터와 별개로 리스트용 정확한 데이터 재호출 (안전성)
-             # 속도가 느리다면 market_data_all에서 prev 계산 로직 추가 필요
              hist = yf.Ticker(item['ticker']).history(period="5d")
              if len(hist) >= 1:
                 price = hist['Close'].iloc[-1]
@@ -491,6 +458,10 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
     """
     st.markdown(full_table_html, unsafe_allow_html=True)
 
+    # [4] 브리핑 리포트 (표 아래로 이동됨)
+    briefing_html = generate_market_briefing(market_data_all)
+    st.markdown(briefing_html, unsafe_allow_html=True)
+
 
 # 2. 암호 화폐
 with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
@@ -510,6 +481,8 @@ with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
         for j in range(2):
             if i + j < len(news_list):
                 entry = news_list[i+j]
+                
+                # [시간 변환] KST (+9시간)
                 dt_str = ""
                 try:
                     if hasattr(entry, 'published_parsed'):
