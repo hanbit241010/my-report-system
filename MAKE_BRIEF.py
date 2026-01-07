@@ -19,7 +19,7 @@ if 'selected_name' not in st.session_state:
 # 3. 스타일(CSS) 정의
 st.markdown("""
     <style>
-    /* [기본] 헤더/푸터/배포버튼 숨김 */
+    /* [기본] 헤더/푸터/배포버튼 등 불필요한 요소 전멸시키기 */
     header[data-testid="stHeader"] { display: none !important; }
     footer { display: none !important; }
     .stDeployButton { display: none !important; }
@@ -53,71 +53,45 @@ st.markdown("""
     .up { color: #d60000; } 
     .down { color: #0051c7; } 
 
-    /* 리스트 헤더 */
-    .market-header {
-        font-weight: bold; border-bottom: 2px solid #555; padding: 10px 5px; color: #333; font-size: 1rem;
-    }
-
-    /* 버튼 스타일 (리스트 아이템화) */
+    /* [PC용] 리스트 버튼 스타일 */
     div.stButton > button {
         width: 100%; border: none; background-color: transparent;
         color: #333; text-align: left; padding: 12px 2px;
         font-size: 1.1rem; font-weight: 500; margin: 0;
-        line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        line-height: 1.2;
     }
     div.stButton > button:hover { background-color: #f9f9f9; color: #d60000; }
     div.stButton > button:focus { box-shadow: none; color: #d60000; }
 
-    /* 수치 데이터 셀 */
-    .data-cell {
-        display: flex; align-items: center; justify-content: flex-end;
-        height: 48px; font-weight: bold; font-size: 1rem; white-space: nowrap;
+    /* [모바일 전용] HTML 테이블 스타일 */
+    .mobile-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+    .mobile-table th {
+        text-align: right;
+        padding: 8px 4px;
+        border-bottom: 2px solid #555;
+        color: #333;
+        font-weight: bold;
+    }
+    .mobile-table td {
+        text-align: right;
+        padding: 12px 4px;
+        border-bottom: 1px solid #eee;
+        color: #333;
+        font-weight: 500;
+    }
+    .mobile-table td:first-child, .mobile-table th:first-child {
+        text-align: left; /* 종목명은 왼쪽 정렬 */
     }
     
-    /* [중요] 모바일 최적화 (표 형태 강제 유지) */
+    /* 반응형 처리 */
     @media (max-width: 600px) {
-        /* 타이틀 크기 축소 */
         .title-text { font-size: 2rem; }
-        
-        /* 1. 가로 정렬 강제 (세로로 쌓이는 것 방지) */
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-        }
-        
-        /* 2. 컬럼 너비 강제 조정 (최소 너비 해제) */
-        [data-testid="column"] {
-            min-width: 0 !important;
-            width: auto !important;
-            flex-shrink: 1 !important;
-            padding: 0 1px !important;
-        }
-        
-        /* 3. 폰트 및 여백 다이어트 (한 줄에 다 넣기 위해) */
-        .market-header { 
-            font-size: 0.7rem !important; 
-            padding: 5px 0 !important; 
-            text-align: center !important;
-            white-space: nowrap;
-        }
-        
-        div.stButton > button { 
-            font-size: 0.75rem !important; 
-            padding: 10px 0 !important; 
-            margin: 0 !important;
-        }
-        
-        .data-cell { 
-            font-size: 0.75rem !important; 
-            height: 40px !important; /* 높이 줄임 */
-            justify-content: center !important; /* 모바일은 중앙 정렬이 깔끔 */
-            padding-right: 0 !important;
-        }
-        
-        /* 섹션 헤더 */
-        .streamlit-expanderHeader p { font-size: 1.5rem !important; }
+        .streamlit-expanderHeader p { font-size: 1.6rem !important; }
+        /* 모바일에서 PC용 컬럼 숨김 처리는 스트림릿 로직에서 해결 */
     }
     
     /* 암호화폐 카드 */
@@ -304,28 +278,46 @@ def render_custom_metric(label, value, delta, pct):
 
 # --- 메인 컨텐츠 ---
 
+market_items = [
+    {"name": "비트코인", "ticker": "BTC-USD"},
+    {"name": "나스닥", "ticker": "^IXIC"},
+    {"name": "S&P 500", "ticker": "^GSPC"},
+    {"name": "다우존스", "ticker": "^DJI"},
+    {"name": "이더리움", "ticker": "ETH-USD"},
+]
+
 # 1. 국제 증시
 with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
-    st.info(f"📊 현재 차트: **{st.session_state['selected_name']}**")
-    render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
-    st.markdown("---")
-    st.markdown("<div style='text-align:right; margin-bottom:5px; font-size:0.85rem; color:#888;'>💡 종목명을 클릭하면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
+    # [1] 차트 선택 기능 (모바일/PC 공용 - Selectbox로 변경하여 공간 확보)
+    # 기존 버튼 리스트 대신 깔끔한 Dropdown 사용
+    options = [item["name"] for item in market_items]
+    current_idx = options.index(st.session_state['selected_name']) if st.session_state['selected_name'] in options else 0
     
-    market_items = [
-        {"name": "비트코인", "ticker": "BTC-USD"},
-        {"name": "나스닥", "ticker": "^IXIC"},
-        {"name": "S&P 500", "ticker": "^GSPC"},
-        {"name": "다우존스", "ticker": "^DJI"},
-        {"name": "이더리움", "ticker": "ETH-USD"},
-    ]
+    selected_option = st.selectbox(
+        "📊 차트 종목 선택 (Select Chart)", 
+        options, 
+        index=current_idx,
+        help="보고 싶은 차트를 선택하세요."
+    )
     
-    # [모바일] 4열 강제 배치
-    h_c1, h_c2, h_c3, h_c4 = st.columns([1.6, 0.8, 0.8, 0.8])
-    h_c1.markdown("<div class='market-header'>종목명</div>", unsafe_allow_html=True)
-    h_c2.markdown("<div class='market-header' style='text-align:right'>현재가</div>", unsafe_allow_html=True)
-    h_c3.markdown("<div class='market-header' style='text-align:right'>등락률</div>", unsafe_allow_html=True)
-    h_c4.markdown("<div class='market-header' style='text-align:right'>등락폭</div>", unsafe_allow_html=True)
+    # 선택 시 상태 업데이트
+    if selected_option != st.session_state['selected_name']:
+        st.session_state['selected_name'] = selected_option
+        # 티커 찾기
+        for item in market_items:
+            if item["name"] == selected_option:
+                st.session_state['selected_ticker'] = item['ticker']
+                st.rerun()
 
+    # [2] 차트 렌더링
+    st.info(f"📈 현재 차트: **{st.session_state['selected_name']}**")
+    render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
+    
+    st.markdown("---")
+    
+    # [3] 시세 리스트 (HTML 테이블로 렌더링 - 모바일 깨짐 방지 핵심)
+    # 데이터를 미리 수집
+    table_rows = ""
     for item in market_items:
         price, rate, diff = 0, 0, 0
         try:
@@ -339,18 +331,36 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
-        btn_label = f"▍ {item['name']}" if st.session_state['selected_ticker'] == item['ticker'] else f"\u00A0\u00A0\u00A0{item['name']}"
+        bg_style = "background-color: #f0f8ff;" if st.session_state['selected_ticker'] == item['ticker'] else ""
         
-        c1, c2, c3, c4 = st.columns([1.6, 0.8, 0.8, 0.8])
-        with c1:
-            if st.button(btn_label, key=f"btn_{item['ticker']}", use_container_width=True): 
-                st.session_state['selected_ticker'] = item['ticker']
-                st.session_state['selected_name'] = item['name']
-                st.rerun()
-        with c2: st.markdown(f"<div class='data-cell' style='color:#333;'>{price:,.2f}</div>", unsafe_allow_html=True)
-        with c3: st.markdown(f"<div class='data-cell' style='color:{color};'>{sign}{rate:.2f}%</div>", unsafe_allow_html=True)
-        with c4: st.markdown(f"<div class='data-cell' style='color:{color};'>{sign}{diff:,.2f}</div>", unsafe_allow_html=True)
-        st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-top: 0px;'></div>", unsafe_allow_html=True)
+        table_rows += f"""
+        <tr style="{bg_style}">
+            <td>{item['name']}</td>
+            <td>{price:,.2f}</td>
+            <td style="color: {color};">{sign}{rate:.2f}%</td>
+            <td style="color: {color};">{sign}{diff:,.2f}</td>
+        </tr>
+        """
+    
+    # HTML 테이블 생성
+    st.markdown(f"""
+    <table class="mobile-table">
+        <thead>
+            <tr>
+                <th>종목명</th>
+                <th>현재가</th>
+                <th>등락률</th>
+                <th>등락폭</th>
+            </tr>
+        </thead>
+        <tbody>
+            {table_rows}
+        </tbody>
+    </table>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
 
 # 2. 암호 화폐
 with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
