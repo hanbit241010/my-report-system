@@ -20,126 +20,134 @@ if 'selected_name' not in st.session_state:
 st.markdown("""
     <style>
     /* -------------------------------------------------------------------
-       [강력 숨김 모드] Manage App 및 하단 요소 제거 
+       [1] 강력 숨김 모드 & 커스텀 하단 배너
     ------------------------------------------------------------------- */
-    /* 헤더, 푸터, 툴바 숨김 */
     header[data-testid="stHeader"] { display: none !important; }
     footer { display: none !important; }
     [data-testid="stToolbar"] { display: none !important; }
-    
-    /* 하단 Manage App 버튼 및 배포 버튼 숨김 (타겟팅 강화) */
-    [data-testid="stManageAppButton"] { display: none !important; visibility: hidden !important; height: 0 !important; }
-    .stAppDeployButton { display: none !important; visibility: hidden !important; }
-    div[class*="stViewerBadge"] { display: none !important; }
-    
-    /* 하단 고정 상태 표시줄 숨김 */
     [data-testid="stStatusWidget"] { display: none !important; }
     
-    /* ------------------------------------------------------------------- */
+    /* 기존 Manage App 버튼 등을 시각적으로 안보이게 처리 */
+    [data-testid="stManageAppButton"] { opacity: 0 !important; pointer-events: none !important; }
+    .stAppDeployButton { display: none !important; }
+    div[class*="stViewerBadge"] { display: none !important; }
 
-    /* [폰트] 섹션 헤더 확대 */
-    .streamlit-expanderHeader p {
-        font-size: 2.0rem !important;
-        font-weight: 800 !important;
-        color: #000 !important;
+    /* [커스텀 하단 배너] 화면 맨 아래에 고정 */
+    .custom-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #ffffff; /* 배경색: 흰색 */
+        border-top: 1px solid #e0e0e0;
+        padding: 10px 20px;
+        z-index: 999999; /* 제일 위에 뜨게 설정 */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+    .footer-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .footer-logo {
+        font-size: 1.2rem;
+        font-weight: 900;
+        color: #333;
+    }
+    .footer-sub {
+        font-size: 0.8rem;
+        color: #888;
+    }
+    .footer-btn {
+        background-color: #d60000;
+        color: white !important;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-decoration: none;
+        box-shadow: 0 2px 5px rgba(214, 0, 0, 0.3);
     }
     
-    /* 타이틀 */
-    .title-text {
-        text-align: center; font-size: 2.5rem; font-weight: 800;
-        margin-bottom: 10px; color: #000;
+    /* -------------------------------------------------------------------
+       [2] 칩(Chip) 스타일 (Radio 버튼을 칩처럼 꾸미기)
+    ------------------------------------------------------------------- */
+    div.row-widget.stRadio > div {
+        flex-direction: row;
+        align-items: stretch;
+        overflow-x: auto; /* 가로 스크롤 가능 */
+        flex-wrap: nowrap; /* 줄바꿈 방지 */
+        gap: 10px;
+        padding-bottom: 5px;
     }
+    div.row-widget.stRadio > div[role="radiogroup"] > label {
+        background-color: #f0f2f6;
+        padding: 8px 16px;
+        border-radius: 20px;
+        border: 1px solid #ddd;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-right: 0 !important;
+        min-width: fit-content;
+    }
+    /* 선택된 칩 스타일 */
+    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
+        background-color: #d60000 !important;
+        color: white !important;
+        border-color: #d60000 !important;
+        font-weight: bold;
+    }
+    /* 라디오 버튼의 동그라미 숨기기 */
+    div.row-widget.stRadio > div[role="radiogroup"] > label > div:first-child {
+        display: none; 
+    }
+    div.row-widget.stRadio > div[role="radiogroup"] > label > div:last-child {
+        margin-left: 0px; 
+    }
+
+    /* -------------------------------------------------------------------
+       [3] 기본 UI 스타일 (타이틀, 전광판, 표 등)
+    ------------------------------------------------------------------- */
+    .streamlit-expanderHeader p { font-size: 2.0rem !important; font-weight: 800 !important; color: #000 !important; }
     
-    /* 전광판 */
-    .ticker-wrap {
-        width: 100%; overflow: hidden; background-color: #f8f9fa;
-        padding: 12px 0; margin-bottom: 20px; border-radius: 8px; white-space: nowrap;
-    }
+    .title-text { text-align: center; font-size: 2.5rem; font-weight: 800; margin-bottom: 10px; color: #000; }
+    
+    .ticker-wrap { width: 100%; overflow: hidden; background-color: #f8f9fa; padding: 12px 0; margin-bottom: 20px; border-radius: 8px; white-space: nowrap; }
     .ticker-content { display: inline-block; animation: scroll 40s linear infinite; }
     .ticker-item { display: inline-block; padding: 0 2rem; font-size: 1.1rem; font-weight: bold; color: #333; }
     @keyframes scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-    .up { color: #d60000; } 
-    .down { color: #0051c7; } 
+    .up { color: #d60000; } .down { color: #0051c7; } 
 
-    /* [리스트 헤더 스타일] */
-    .list-header {
-        font-weight: bold;
-        border-bottom: 2px solid #333;
-        padding-bottom: 5px;
-        margin-bottom: 5px;
-        color: #333;
-        font-size: 1rem;
-    }
-
-    /* [버튼 스타일 - 텍스트처럼 위장] */
-    div.stButton > button {
-        width: 100%;
-        border: none;
-        background-color: transparent;
-        color: #333;
-        text-align: left;
-        padding: 0;
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 600;
-        height: auto;
-        min-height: 0px;
-        line-height: 1.5;
-    }
-    div.stButton > button:hover { color: #d60000; background-color: transparent; }
-    div.stButton > button:focus { box-shadow: none; }
-    div.stButton > button:active { background-color: transparent; }
+    /* 테이블 스타일 */
+    .custom-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-family: 'sans-serif'; font-size: 0.9rem; }
+    .custom-table th { border-bottom: 2px solid #333; padding: 10px 5px; text-align: right; color: #333; font-weight: bold; }
+    .custom-table td { border-bottom: 1px solid #eee; padding: 12px 5px; text-align: right; color: #333; font-weight: 500; }
+    .custom-table th:first-child, .custom-table td:first-child { text-align: left; }
     
-    div.stButton > button p { font-size: 1rem; margin: 0; padding: 0; }
+    /* 선택된 행 스타일 (포인트 라인 + 배경) */
+    .selected-row { background-color: #fff0f0; }
+    .selected-text { color: #d60000; font-weight: 900; border-left: 4px solid #d60000; padding-left: 8px; }
 
-    /* [데이터 셀 스타일] */
-    .data-text {
-        font-size: 1rem;
-        font-weight: 500;
-        color: #333;
-        text-align: right;
-        display: block;
-        margin-top: 5px;
-    }
-
-    /* [모바일 강제 가로 정렬 핵심 코드] */
+    /* 모바일 강제 가로 정렬 */
     @media (max-width: 600px) {
         .title-text { font-size: 2rem; }
+        .custom-table th, .custom-table td { font-size: 0.75rem; padding: 10px 2px; }
         
-        /* 1. 컬럼 그룹(HorizontalBlock)이 세로로 바뀌는 것 방지 */
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important; /* 강제 가로 정렬 */
-            flex-wrap: nowrap !important;   /* 줄바꿈 금지 */
-            align-items: center !important;
-            width: 100% !important;
-        }
+        /* 칩 버튼 크기 조절 */
+        div.row-widget.stRadio > div[role="radiogroup"] > label { padding: 6px 12px; font-size: 0.85rem; }
         
-        /* 2. 개별 컬럼(Column)이 최소 너비를 가져서 밀리는 것 방지 */
-        [data-testid="column"] {
-            flex: 1 1 auto !important;
-            width: auto !important;
-            min-width: 0 !important; /* 최소 너비 0으로 설정해 좁아질 수 있게 함 */
-            padding: 0 1px !important;
-        }
-        
-        /* 3. 내부 텍스트 사이즈 조절 */
-        .list-header { font-size: 0.75rem !important; text-align: center; white-space: nowrap; }
-        div.stButton > button { font-size: 0.8rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .data-text { font-size: 0.75rem !important; margin-top: 2px; white-space: nowrap; }
+        /* 하단 배너 여백 확보를 위해 본문에 패딩 추가 */
+        .block-container { padding-bottom: 80px !important; }
     }
 
-    /* 암호화폐/뉴스 스타일 */
-    .insight-box {
-        background-color: #f8f9fa; border-radius: 10px; padding: 20px;
-        text-align: center; border: 1px solid #eee; margin-bottom: 10px;
-    }
+    /* 카드 스타일 */
+    .insight-box { background-color: #f8f9fa; border-radius: 10px; padding: 20px; text-align: center; border: 1px solid #eee; margin-bottom: 10px; }
     .insight-label { font-size: 1rem; color: #666; margin-bottom: 5px; }
     .insight-value { font-size: 2rem; font-weight: bold; color: #333; }
-    .news-card {
-        background-color: white; padding: 15px; border-radius: 10px;
-        border: 1px solid #eee; margin-bottom: 10px; height: 100%;
-    }
+    .news-card { background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; margin-bottom: 10px; height: 100%; }
     .news-title { font-weight: bold; font-size: 1rem; margin-bottom: 5px; color: #333; text-decoration: none; display: block; }
     .news-date { font-size: 0.85rem; color: #888; }
     </style>
@@ -308,25 +316,34 @@ market_items = [
 
 # 1. 국제 증시
 with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
-    # 차트 렌더링
-    st.info(f"📈 현재 차트: **{st.session_state['selected_name']}**")
+    
+    # [1] 상단 칩(Chip) UI - (st.radio를 CSS로 변신시킴)
+    # 가로 스크롤 가능하며, 터치 시 버튼처럼 작동
+    options = [item["name"] for item in market_items]
+    current_idx = options.index(st.session_state['selected_name']) if st.session_state['selected_name'] in options else 0
+    
+    selected_chip = st.radio(
+        "차트 선택",
+        options,
+        index=current_idx,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    # 선택 변경 시 상태 업데이트
+    if selected_chip != st.session_state['selected_name']:
+        st.session_state['selected_name'] = selected_chip
+        for item in market_items:
+            if item["name"] == selected_chip:
+                st.session_state['selected_ticker'] = item['ticker']
+                st.rerun()
+
+    # [2] 차트 렌더링
+    st.info(f"📊 현재 차트: **{st.session_state['selected_name']}**")
     render_highchart_global(st.session_state['selected_ticker'], st.session_state['selected_name'])
     
-    # [수정됨] 차트와 리스트 사이의 불필요한 구분선(---) 제거함
-    # 간격 조절용 투명 박스만 살짝 추가
-    st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
-    
-    st.markdown("<div style='text-align:right; margin-bottom:10px; font-size:0.8rem; color:#666;'>💡 종목명(이름)을 누르면 차트가 변경됩니다.</div>", unsafe_allow_html=True)
-    
-    # [리스트 헤더]
-    col_ratios = [1.6, 0.8, 0.8, 0.8]
-    h1, h2, h3, h4 = st.columns(col_ratios)
-    h1.markdown("<div class='list-header'>종목명</div>", unsafe_allow_html=True)
-    h2.markdown("<div class='list-header' style='text-align:right'>현재가</div>", unsafe_allow_html=True)
-    h3.markdown("<div class='list-header' style='text-align:right'>등락률</div>", unsafe_allow_html=True)
-    h4.markdown("<div class='list-header' style='text-align:right'>등락폭</div>", unsafe_allow_html=True)
-
-    # [리스트 본문]
+    # [3] 시세 리스트 (HTML 테이블 + 선택된 행 강조)
+    html_rows = ""
     for item in market_items:
         price, rate, diff = 0, 0, 0
         try:
@@ -341,32 +358,33 @@ with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
         color = "#d60000" if diff >= 0 else "#0051c7"
         sign = "+" if diff >= 0 else ""
         
-        # 선택 여부 확인
-        is_selected = (st.session_state['selected_ticker'] == item['ticker'])
-        
-        # [디자인 유지] 선택된 경우 빨간색+볼드체+포인트라인
-        if is_selected:
-            btn_label = f":red[**▍ {item['name']}**]"
+        # [핵심] 선택된 행 스타일링
+        if st.session_state['selected_ticker'] == item['ticker']:
+            row_class = "selected-row"
+            # 종목명에 포인트 라인과 색상 적용
+            name_cell = f"<span class='selected-text'>{item['name']}</span>"
         else:
-            btn_label = item['name']
+            row_class = ""
+            name_cell = item['name']
         
-        # 컬럼 생성
-        c1, c2, c3, c4 = st.columns(col_ratios)
-        
-        # 1열: 버튼
-        with c1:
-            if st.button(btn_label, key=f"btn_{item['ticker']}", use_container_width=True):
-                st.session_state['selected_ticker'] = item['ticker']
-                st.session_state['selected_name'] = item['name']
-                st.rerun()
-        
-        # 2~4열: 데이터 텍스트
-        with c2: st.markdown(f"<span class='data-text'>{price:,.2f}</span>", unsafe_allow_html=True)
-        with c3: st.markdown(f"<span class='data-text' style='color:{color}'>{sign}{rate:.2f}%</span>", unsafe_allow_html=True)
-        with c4: st.markdown(f"<span class='data-text' style='color:{color}'>{sign}{diff:,.2f}</span>", unsafe_allow_html=True)
-        
-        # 구분선
-        st.markdown("<div style='border-bottom: 1px solid #eee; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
+        html_rows += f"<tr class='{row_class}'><td>{name_cell}</td><td>{price:,.2f}</td><td style='color:{color}'>{sign}{rate:.2f}%</td><td style='color:{color}'>{sign}{diff:,.2f}</td></tr>"
+
+    full_table_html = f"""
+    <table class="custom-table">
+        <thead>
+            <tr>
+                <th>종목명</th>
+                <th>현재가</th>
+                <th>등락률</th>
+                <th>등락폭</th>
+            </tr>
+        </thead>
+        <tbody>
+            {html_rows}
+        </tbody>
+    </table>
+    """
+    st.markdown(full_table_html, unsafe_allow_html=True)
 
 
 # 2. 암호 화폐
@@ -425,4 +443,14 @@ with st.expander("📈 국내 증시 (Domestic Market)", expanded=False):
     st.subheader("KOSDAQ Market Trend")
     render_highchart_domestic('KQ11', 'KOSDAQ', height=400)
 
-st.markdown("<div style='text-align:center; color:#ccc; margin-top:50px; font-size:0.8rem;'>AJIN REPORT | Generated by AJIN PARTNERS</div>", unsafe_allow_html=True)
+# [하단 커스텀 배너] - Streamlit Footer 가리기용
+# 이미지, 텍스트, 링크 수정하는 곳
+st.markdown("""
+<div class="custom-footer">
+    <div class="footer-content">
+        <div class="footer-logo">🏢 AJIN PARTNERS</div>
+        <div class="footer-sub">Financial Report</div>
+    </div>
+    <a href="tel:010-0000-0000" class="footer-btn">📞 문의하기</a>
+</div>
+""", unsafe_allow_html=True)
