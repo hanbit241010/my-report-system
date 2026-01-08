@@ -1,392 +1,425 @@
-import streamlit as st
-import streamlit.components.v1 as components
-import yfinance as yf
-import pandas as pd
-import requests
-import feedparser
+# -*- coding: utf-8 -*-
+import logging
+import sqlite3
 from datetime import datetime, timedelta
-import json
-import time
+import asyncio
+from typing import Union
+from telegram import Update, ReactionTypeEmoji
+from telegram.helpers import escape_markdown
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    ChatMemberHandler,
+    MessageHandler,
+    filters,
+)
+from telegram.constants import ChatMemberStatus
+from telegram.error import TelegramError, BadRequest
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# ==========================================
-# 1. 페이지 설정 및 스타일 (수정 없음, 디자인 유지)
-# ==========================================
-st.set_page_config(page_title="AJIN REPORT", layout="wide")
+# --- ⚙️ 설정 ---
+TELEGRAM_BOT_TOKEN = "-----------" # 실제 토큰으로 변경하세요
+ADMIN_GROUP_ID = "---------" # 실제 관리자 그룹 ID로 변경하세요
+CHANNELS = {
+    # --- 자동 추방 기능이 필요한 채널 ---
+    "-1002930721999": {"name": "🌸VIP Crypto KK🔥🌸 2기", "kick_enabled": True, "default_days": 7},
+    "-1003081779651": {"name": "VIP 검정개미 아카데미 2기", "kick_enabled": True, "default_days": 7},
+    "-1003050352036": {"name": "VIP 주식 비스트로 2기", "kick_enabled": True, "default_days": 7},
+    "-1003098990495": {"name": "코인1번가 2기" , "kick_enabled": True, "default_days": 7},
 
-st.markdown("""
-    <style>
-    /* 기본 UI 숨김 */
-    header[data-testid="stHeader"], footer { display: none !important; }
-    [data-testid="stToolbar"], [data-testid="stStatusWidget"] { display: none !important; }
-    [data-testid="stManageAppButton"] { display: none !important; }
+    # --- 입장/퇴장 로그만 필요한 채널 ---
+    "-1002766472889": {"name": "시크릿 코인 2기", "kick_enabled": False},
+    "-1003176222791": {"name": "검정개미 아카데미 2기", "kick_enabled": False},
+    "-1002950756040": {"name": "🌸Crypto KK🔥🌸 2기", "kick_enabled": False},
+    "-1002930074726": {"name": "주식 비스트로 2기", "kick_enabled": False},
+    "-1003035045830": {"name": "골드코인 2기" , "kick_enabled": False},
+}
 
-    /* 커스텀 하단 배너 */
-    .custom-footer {
-        position: fixed; bottom: 0; left: 0; width: 100%; height: 70px;
-        background-color: #ffffff; border-top: 1px solid #e0e0e0;
-        padding: 0 20px; z-index: 999999; display: flex; align-items: center; justify-content: space-between;
-    }
-    .footer-main { font-size: 1.1rem; font-weight: 900; color: #333; }
-    .footer-btn {
-        background-color: #d60000; color: white !important; padding: 8px 16px;
-        border-radius: 20px; font-size: 0.85rem; font-weight: bold; text-decoration: none;
-    }
+ALL_CHANNEL_IDS = [int(id) for id in CHANNELS.keys()]
+KICK_ENABLED_CHANNEL_IDS = [int(id) for id, props in CHANNELS.items() if props["kick_enabled"]]
 
-    /* 브리핑 카드 */
-    .briefing-card {
-        background-color: #ffffff; border: 1px solid #ddd; border-left: 5px solid #000;
-        border-radius: 4px; padding: 25px; margin: 20px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    .briefing-header { font-size: 1.3rem; font-weight: 900; color: #000; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-    .briefing-text { font-size: 1rem; line-height: 1.7; color: #333; text-align: justify; }
-    .highlight { background-color: #fff9c4; font-weight: bold; padding: 2px 4px; border-radius: 4px; }
+# --- 로깅 설정 ---
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-    /* 히트맵 */
-    .heat-container { width: 100%; background-color: #f0f0f0; border-radius: 4px; height: 10px; margin-top: 5px; overflow: hidden; }
-    .heat-fill { height: 100%; border-radius: 4px; }
-    .theme-tag { font-size: 0.75rem; background-color: #f1f3f5; color: #555; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
+# --- 데이터베이스 설정 ---
+DB_FILE = "members.db"
+MAX_DAYS_ALLOWED = 36500
 
-    /* 테이블 */
-    .custom-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
-    .custom-table th { border-bottom: 2px solid #333; padding: 10px 5px; text-align: right; }
-    .custom-table td { border-bottom: 1px solid #eee; padding: 12px 5px; text-align: right; }
-    .selected-row { background-color: #fff5f5; font-weight: bold; color: #d60000; }
-    
-    /* 칩 버튼 */
-    div.row-widget.stRadio > div { flex-direction: row; flex-wrap: wrap !important; gap: 8px; }
-    div.row-widget.stRadio > div[role="radiogroup"] > label { background-color: #f0f2f6; padding: 6px 14px; border-radius: 20px; border: 1px solid #e0e0e0; }
-    div.row-widget.stRadio > div[role="radiogroup"] > label[data-checked="true"] { background-color: #d60000 !important; color: white !important; border-color: #d60000 !important; }
-    
-    @media (max-width: 600px) { .block-container { padding-bottom: 100px !important; } }
-    </style>
-""", unsafe_allow_html=True)
+def setup_database():
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS members (
+            user_id INTEGER NOT NULL, channel_id INTEGER NOT NULL, user_name TEXT,
+            kick_timestamp INTEGER NOT NULL, log_message_id INTEGER,
+            PRIMARY KEY (user_id, channel_id)
+        )
+    """)
+    conn.commit(); conn.close(); logger.info("데이터베이스가 준비되었습니다.")
 
-# ==========================================
-# 2. 안전한 데이터 수집 함수 (Sequential Safe Fetch)
-# ==========================================
+# --- 데이터베이스 함수 ---
+def add_new_user(user_id, user_name, channel_id, days=7, log_message_id=None):
+    days_safe = min(days, MAX_DAYS_ALLOWED)
+    try: kick_time = datetime.now() + timedelta(days=days_safe)
+    except OverflowError: kick_time = datetime.max
+    kick_timestamp = int(kick_time.timestamp())
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
+    safe_user_name = user_name if user_name is not None else ""
+    cursor.execute("INSERT OR REPLACE INTO members (user_id, user_name, channel_id, kick_timestamp, log_message_id) VALUES (?, ?, ?, ?, ?)",
+                   (user_id, safe_user_name, channel_id, kick_timestamp, log_message_id)); conn.commit(); conn.close()
 
-def safe_get_price(ticker):
-    """
-    단일 종목의 현재가와 등락률을 안전하게 가져오는 함수
-    에러가 발생하면 0, 0을 반환하여 앱이 죽는 것을 방지함
-    """
+def set_user_expiry(user_id, channel_id, days_to_set):
+    days_to_set_safe = min(days_to_set, MAX_DAYS_ALLOWED)
+    try: kick_time = datetime.now() + timedelta(days=days_to_set_safe)
+    except OverflowError: kick_time = datetime.max
+    new_kick_timestamp = int(kick_time.timestamp())
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
+    cursor.execute("UPDATE members SET kick_timestamp = ? WHERE user_id = ? AND channel_id = ?", (new_kick_timestamp, user_id, channel_id)); conn.commit(); conn.close()
+    return days_to_set_safe, kick_time
+
+def extend_user_expiry(user_id, channel_id, days_to_add):
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
+    cursor.execute("SELECT kick_timestamp FROM members WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
+    result = cursor.fetchone(); current_timestamp = int(datetime.now().timestamp())
+    days_to_add_safe = min(days_to_add, MAX_DAYS_ALLOWED)
+    base_time = datetime.fromtimestamp(result[0]) if result and result[0] > current_timestamp else datetime.now()
+    try: new_kick_time = base_time + timedelta(days=days_to_add_safe)
+    except OverflowError: new_kick_time = datetime.max
+    new_kick_timestamp = int(new_kick_time.timestamp())
+    cursor.execute("UPDATE members SET kick_timestamp = ? WHERE user_id = ? AND channel_id = ?", (new_kick_timestamp, user_id, channel_id)); conn.commit(); conn.close()
+    return days_to_add_safe, new_kick_time
+
+def get_user_info(user_id, channel_id):
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
+    cursor.execute("SELECT user_name, log_message_id FROM members WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
+    result = cursor.fetchone(); conn.close(); return result if result else (None, None)
+def remove_user(user_id, channel_id):
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
+    cursor.execute("DELETE FROM members WHERE user_id = ? AND channel_id = ?", (user_id, channel_id)); conn.commit(); conn.close()
+
+# --- Helper Function to Send Message with Fallback ---
+async def send_admin_message(context: Union[ContextTypes.DEFAULT_TYPE, Application], text: str, parse_mode: Union[str, None] = 'Markdown') -> Union[Update.MESSAGE, None]:
+    if isinstance(context, Application): bot = context.bot
+    elif hasattr(context, 'bot'): bot = context.bot
+    else: logger.error(f"send_admin_message에 예상치 못한 타입({type(context)}) 전달됨"); return None
+
+    sent_message = None
     try:
-        t = yf.Ticker(ticker)
-        # period='2d'로 최소한의 데이터만 요청
-        hist = t.history(period="2d")
-        if len(hist) >= 2:
-            price = hist['Close'].iloc[-1]
-            prev = hist['Close'].iloc[-2]
-            pct = ((price - prev) / prev) * 100
-            change = price - prev
-            return price, pct, change
-        elif len(hist) == 1:
-            return hist['Close'].iloc[-1], 0.0, 0.0
-        return 0.0, 0.0, 0.0
-    except:
-        return 0.0, 0.0, 0.0
+        sent_message = await bot.send_message(chat_id=ADMIN_GROUP_ID, text=text, parse_mode=parse_mode)
+    except BadRequest as e:
+        if "Can't parse entities" in str(e):
+            logger.warning(f"Markdown 전송 실패 ({e}), Plain text로 재시도...")
+            try: sent_message = await bot.send_message(chat_id=ADMIN_GROUP_ID, text=text)
+            except Exception as e2: logger.error(f"Plain text 알림 재전송 실패: {e2}")
+        else: logger.error(f"관리자 그룹 메시지 전송 실패 (BadRequest): {e}")
+    except Exception as e: logger.error(f"관리자 그룹 메시지 전송 중 예상치 못한 오류: {e}")
+    return sent_message
 
-@st.cache_data(ttl=600)
-def get_nasdaq_analysis():
-    """
-    나스닥 주요 종목을 하나씩 조회하여 안전하게 리스트를 만듦
-    """
-    # 주요 종목 리스트 (안정성을 위해 40여개 주요 종목으로 구성)
-    target_tickers = [
-        ("NVDA", "AI반도체"), ("AAPL", "모바일"), ("MSFT", "SW"), ("AMZN", "이커머스"), 
-        ("META", "SNS"), ("GOOGL", "검색"), ("TSLA", "전기차"), ("AVGO", "통신"), 
-        ("NFLX", "OTT"), ("AMD", "반도체"), ("QCOM", "통신"), ("INTC", "반도체"), 
-        ("PEP", "식음료"), ("COST", "유통"), ("SBUX", "식음료"), ("AMGN", "바이오"), 
-        ("GILD", "바이오"), ("TXN", "반도체"), ("ADBE", "SW"), ("PYPL", "결제"), 
-        ("CSCO", "네트워크"), ("CMCSA", "미디어"), ("TMUS", "통신"), ("INTU", "핀테크"), 
-        ("MDLZ", "식음료"), ("ISRG", "의료기기"), ("LRCX", "장비"), ("MU", "메모리"), 
-        ("ADI", "반도체"), ("REGN", "바이오"), ("VRTX", "바이오"), ("PANW", "보안"), 
-        ("SNPS", "SW"), ("CDNS", "SW"), ("KLAC", "장비"), ("MAR", "호텔"), 
-        ("ABNB", "여행"), ("ORLY", "유통")
-    ]
-    
-    results = []
-    
-    # 하나씩 순차적으로 가져옴 (속도는 느려도 가장 안전함)
-    for ticker, theme in target_tickers:
-        p, pct, chg = safe_get_price(ticker)
-        if p != 0: # 데이터가 있는 경우만 추가
-            results.append({"ticker": ticker, "pct": pct, "theme": theme})
-    
-    # 정렬
-    sorted_data = sorted(results, key=lambda x: x['pct'], reverse=True)
-    # 데이터가 부족할 경우를 대비해 슬라이싱 안전처리
-    top_5 = sorted_data[:10] if len(sorted_data) >= 10 else sorted_data
-    bot_5 = sorted_data[-10:] if len(sorted_data) >= 10 else []
-    
-    return top_5, bot_5
+# --- 텔레그램 봇 핸들러 ---
 
-def get_briefing_metrics():
-    """브리핑용 지표 수집"""
-    # 역시 안전하게 하나씩
-    nas_p, nas_pct, _ = safe_get_price("^IXIC")
-    spx_p, spx_pct, _ = safe_get_price("^GSPC")
-    dji_p, dji_pct, _ = safe_get_price("^DJI")
-    vix_p, _, _ = safe_get_price("^VIX")
-    tnx_p, tnx_pct, _ = safe_get_price("^TNX")
-    
-    return {
-        "nas_pct": nas_pct,
-        "spx_pct": spx_pct,
-        "dji_pct": dji_pct,
-        "vix": vix_p,
-        "tnx": tnx_p,
-        "tnx_pct": tnx_pct
-    }
+async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    result = update.chat_member
+    if (not result or
+            result.chat.id not in ALL_CHANNEL_IDS or
+            (result.from_user and result.from_user.id == context.bot.id)):
+        return
 
-def get_crypto_safe():
-    kimp, dom = 0.0, 0.0
-    news_items = []
+    user = result.new_chat_member.user; channel_id = result.chat.id
+    channel_props = CHANNELS.get(str(channel_id))
+    if not channel_props: return
+
+    channel_name = channel_props["name"]
+    is_kick_enabled = channel_props["kick_enabled"]
+    user_name = user.full_name if user.full_name else "이름없음"
+
+    # --- 새 멤버 입장 ---
+    if (result.new_chat_member.status == ChatMemberStatus.MEMBER and
+        result.old_chat_member.status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED, "kicked")):
+
+        log_message_text = ""
+        if is_kick_enabled:
+            default_days = channel_props.get("default_days", 7)
+            log_message_text = (
+                f"🔔 {channel_name} 신규 회원 입장\n\n"
+                f"**이름:** {user_name}\n"
+                f"**ID:** `{user.id}`\n"
+                f"**만료:** {default_days}일 뒤\n\n"
+                f"👇 아래 명령어로 기간을 관리하세요.\n"
+                f"1️⃣ `{'/set'} {user.id} 30 {channel_name}`\n"
+                f"2️⃣ `{'/add'} {user.id} 30 {channel_name}`"
+            )
+        else:
+            log_message_text = (
+                f"🟢 {channel_name} 회원 입장\n\n"
+                f"**이름:** {user_name}\n"
+                f"**ID:** `{user.id}`"
+            )
+
+        sent_message = await send_admin_message(context, log_message_text)
+
+        if sent_message and is_kick_enabled:
+            await asyncio.to_thread(add_new_user, user.id, user.full_name, channel_id, days=default_days, log_message_id=sent_message.message_id)
+
+    # --- 멤버 스스로 퇴장 ---
+    elif (result.new_chat_member.status == ChatMemberStatus.LEFT and
+          result.old_chat_member.status == ChatMemberStatus.MEMBER):
+        if is_kick_enabled: await asyncio.to_thread(remove_user, user.id, channel_id)
+
+        log_message_text = (
+            f"🔴 {channel_name} 회원 퇴장\n\n"
+            f"**이름:** {user_name}\n"
+            f"**ID:** `{user.id}` (스스로 나감)"
+        )
+        await send_admin_message(context, log_message_text)
+
+    # --- 관리자에 의해 추방됨 ---
+    elif (result.new_chat_member.status in (ChatMemberStatus.BANNED, "kicked") and
+          result.old_chat_member.status == ChatMemberStatus.MEMBER):
+        if is_kick_enabled: await asyncio.to_thread(remove_user, user.id, channel_id)
+
+        admin_name = result.from_user.full_name if result.from_user and result.from_user.id != user.id else ""
+        admin_info = f" (수행자: {admin_name})" if admin_name else ""
+        log_message_text = (f"🔨 {channel_name} 관리자 추방\n\n" f"**대상:** {user_name} (`{user.id}`){admin_info}")
+
+        await send_admin_message(context, log_message_text)
+
+async def auto_reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        # 김프
-        btc_krw_res = requests.get("https://api.bithumb.com/public/ticker/BTC_KRW", timeout=3).json()
-        btc_krw = float(btc_krw_res['data']['closing_price'])
-        
-        p, _, _ = safe_get_price("BTC-USD")
-        ex, _, _ = safe_get_price("KRW=X")
-        
-        if p > 0 and ex > 0:
-            kimp = ((btc_krw - (p * ex)) / (p * ex)) * 100
-    except: pass
+        if update.channel_post: await update.channel_post.set_reaction(reaction=ReactionTypeEmoji("👍"))
+    except Exception as e: logger.error(f"자동 호응 기능 처리 중 오류 발생: {e}")
+
+# [수정됨] is_admin 함수 삭제됨
+
+async def command_parser(update: Update, context: ContextTypes.DEFAULT_TYPE, command_func, command_name):
+    # [수정됨] 관리자 그룹인지 확인하는 로직만 유지, is_admin() 체크 제거
+    if update.effective_chat.id != int(ADMIN_GROUP_ID): return
     
+    # [수정됨] is_admin 확인 제거 -> 무조건 실행
+
     try:
-        # 도미넌스
-        res = requests.get("https://api.coinlore.net/api/global/", timeout=3).json()
-        dom = float(res[0]['btc_d'])
-    except: pass
+        if len(context.args) < 3: raise ValueError("인수가 부족합니다.")
+
+        user_id = int(context.args[0])
+        days_input = int(context.args[1])
+        channel_name_arg = " ".join(context.args[2:])
+
+        target_channel_id, original_channel_name = None, None
+        for cid, cprops in CHANNELS.items():
+            if cprops['name'] == channel_name_arg:
+                target_channel_id, original_channel_name = int(cid), cprops['name']
+                break
+
+        if not target_channel_id:
+            await update.message.reply_text(f"'{channel_name_arg}' 채널을 찾을 수 없습니다."); return
+
+        days_applied, new_expiry_date = await asyncio.to_thread(command_func, user_id, target_channel_id, days_input)
+        user_name, log_message_id = await asyncio.to_thread(get_user_info, user_id, target_channel_id)
+
+        user_name_display = user_name if user_name else "정보없음"
+        admin_name_display = update.effective_user.full_name if update.effective_user.full_name else ""
+
+        feedback_text = ""
+        if command_name == 'set':
+            feedback_text = (
+                f"✅ {original_channel_name} 기간 **설정** 완료\n\n"
+                f"**대상:** {user_name_display} (`{user_id}`)\n"
+                f"**적용 기간:** {days_applied}일 " + (f"(입력: {days_input}일)" if days_applied != days_input else "") + "\n"
+                f"**새 만료일:** {new_expiry_date.strftime('%Y년 %m월 %d일')}로 설정\n"
+                f"(수정자: {admin_name_display})"
+            )
+        else: # add
+            feedback_text = (
+                f"✅ {original_channel_name} 기간 **연장** 완료\n\n"
+                f"**대상:** {user_name_display} (`{user_id}`)\n"
+                f"**누적 연장:** {days_applied}일 추가 " + (f"(입력: {days_input}일)" if days_applied != days_input else "") + "\n"
+                f"**새 만료일:** {new_expiry_date.strftime('%Y년 %m월 %d일')}\n"
+                f"(수정자: {admin_name_display})"
+            )
+
+        feedback_text += (
+            f"\n\n👇 아래 명령어로 기간을 관리하세요.\n"
+            f"1️⃣ `{'/set'} {user_id} 30 {original_channel_name}`\n"
+            f"2️⃣ `{'/add'} {user_id} 30 {original_channel_name}`"
+        )
+
+        sent_feedback = await send_admin_message(context, feedback_text)
+
+        if log_message_id and sent_feedback:
+            try: await context.bot.edit_message_text(chat_id=ADMIN_GROUP_ID, message_id=log_message_id, text=feedback_text, parse_mode='Markdown')
+            except BadRequest as e:
+                 if "Can't parse entities" in str(e):
+                    logger.warning(f"로그 메시지 ID {log_message_id} 수정 실패 (Markdown 오류), Plain text 재시도...")
+                    try: await context.bot.edit_message_text(chat_id=ADMIN_GROUP_ID, message_id=log_message_id, text=feedback_text)
+                    except Exception as e_edit_plain: logger.error(f"Plain text 로그 수정 실패: {e_edit_plain}")
+                 else: logger.warning(f"로그 메시지 ID {log_message_id} 수정 실패: {e}")
+            except Exception as e_edit: logger.warning(f"로그 메시지 ID {log_message_id} 수정 중 예상치 못한 오류: {e_edit}")
+
+    except (ValueError, IndexError):
+        await update.message.reply_text(f"명령어 형식 오류. 예:\n`/{command_name} 12345 30 \"{list(CHANNELS.values())[0]['name']}\"`", parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"/{command_name} 명령어 처리 중 오류: {e}", exc_info=True)
+        await send_admin_message(context, f"명령어 처리 중 오류 발생: {escape_markdown(str(e), version=2)}", parse_mode='MarkdownV2')
+
+async def set_command(update: Update, context: ContextTypes.DEFAULT_TYPE): await command_parser(update, context, set_user_expiry, 'set')
+async def add_command(update: Update, context: ContextTypes.DEFAULT_TYPE): await command_parser(update, context, extend_user_expiry, 'add')
+
+async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # [수정됨] 관리자 그룹인지 확인하는 로직만 유지, is_admin() 체크 제거
+    if update.effective_chat.id != int(ADMIN_GROUP_ID): return
     
+    # [수정됨] is_admin 확인 제거 -> 무조건 실행
+
     try:
-        # 뉴스 10개 (블록미디어)
-        rss_url = "https://www.blockmedia.co.kr/archives/category/market/digital-asset/feed"
-        feed = feedparser.parse(rss_url)
-        news_items = feed.entries[:10]
-    except: pass
-    
-    return kimp, dom, news_items
+        if not context.args: await update.message.reply_text("사용법: `/ban [사용자ID]`"); return
 
-def render_highchart_safe(ticker, name):
-    """차트 렌더링 - 데이터 없으면 메시지 표시"""
+        user_id_to_ban = int(context.args[0])
+        admin_name_display = update.effective_user.full_name if update.effective_user.full_name else ""
+        success_channels, failed_channels = [], []
+
+        for channel_id_str, props in CHANNELS.items():
+            channel_id, channel_name = int(channel_id_str), props['name']
+            try:
+                await context.bot.ban_chat_member(chat_id=channel_id, user_id=user_id_to_ban)
+                if props['kick_enabled']: await asyncio.to_thread(remove_user, user_id_to_ban, channel_id)
+                success_channels.append(channel_name)
+            except TelegramError as e: failed_channels.append(f"{channel_name} (사유: {e.message})")
+            except Exception as e: failed_channels.append(f"{channel_name} (사유: {str(e)})")
+
+        feedback_text = (
+            f"--- 🔨 사용자 전체 채널 추방 실행 ---\n\n"
+            f"대상 ID: {user_id_to_ban}\n"
+            f"실행자: {admin_name_display}\n\n"
+        )
+        if success_channels: feedback_text += "✅ 성공:\n" + "\n".join([f"- {name}" for name in success_channels])
+        if failed_channels: feedback_text += "\n\n❌ 실패:\n" + "\n".join([f"- {name}" for name in failed_channels])
+
+        # Plain Text로 직접 전송
+        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=feedback_text)
+
+    except (ValueError, IndexError): await update.message.reply_text("명령어 형식 오류. 예: `/ban 12345678`")
+    except Exception as e:
+        logger.error(f"/ban 명령어 처리 중 오류: {e}", exc_info=True)
+        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"/ban 명령어 처리 중 오류 발생: {e}") # Plain Text 오류 메시지
+
+async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # [수정됨] 관리자 그룹인지 확인하는 로직만 유지, is_admin() 체크 제거
+    if update.effective_chat.id != int(ADMIN_GROUP_ID): return
+    
+    # [수정됨] is_admin 확인 제거 -> 무조건 실행
+
     try:
-        df = yf.download(ticker, period="1y", interval="1d", progress=False)
-        if df.empty:
-            st.warning(f"{name} 차트 데이터를 불러올 수 없습니다.")
-            return
+        if not context.args: await update.message.reply_text("사용법: `/unban [사용자ID]`"); return
 
-        # 멀티인덱스 컬럼 처리
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-            
-        df = df.reset_index()
-        
-        # 타임스탬프 변환 (필수)
-        ohlc = []
-        for _, row in df.iterrows():
-            ts = int(row['Date'].timestamp() * 1000)
-            ohlc.append([ts, float(row['Open']), float(row['High']), float(row['Low']), float(row['Close'])])
-            
-        ohlc_json = json.dumps(ohlc)
-        
-        html = f"""
-        <html><head><script src="https://code.highcharts.com/stock/highstock.js"></script></head>
-        <body style="margin:0;"><div id="c" style="height:350px;"></div><script>
-        Highcharts.stockChart('c', {{
-            rangeSelector:{{selected:1}}, navigator:{{enabled:false}}, scrollbar:{{enabled:false}}, credits:{{enabled:false}},
-            series:[{{type:'candlestick', name:'{name}', data:{ohlc_json}, color:'#0051c7', upColor:'#d60000', lineColor:'#0051c7', upLineColor:'#d60000'}}]
-        }});
-        </script></body></html>"""
-        components.html(html, height=360)
-    except:
-        st.error(f"{name} 차트 로딩 실패")
+        user_id_to_unban = int(context.args[0])
+        admin_name_display = update.effective_user.full_name if update.effective_user.full_name else ""
+        success_channels, failed_channels = [], []
 
-# ==========================================
-# 3. UI 구성 (Layout)
-# ==========================================
+        for channel_id_str, props in CHANNELS.items():
+            channel_id, channel_name = int(channel_id_str), props['name']
+            try:
+                await context.bot.unban_chat_member(chat_id=channel_id, user_id=user_id_to_unban, only_if_banned=True)
+                success_channels.append(channel_name)
+            except TelegramError as e: failed_channels.append(f"{channel_name} (사유: {e.message})")
+            except Exception as e: failed_channels.append(f"{channel_name} (사유: {str(e)})")
 
-now = datetime.now()
-st.markdown(f"<div style='text-align:center; font-size:2.2rem; font-weight:900;'>📈 AJIN REPORT</div>", unsafe_allow_html=True)
-st.markdown(f"<div style='text-align:center; margin-bottom:20px;'><span style='background:#333; color:white; padding:5px 20px; border-radius:20px; font-weight:bold;'>{now.strftime('%Y. %m. %d')} (Week {now.isocalendar()[1]:02d})</span></div>", unsafe_allow_html=True)
+        feedback_text = (
+            f"--- 🔓 사용자 전체 채널 차단 해제 실행 ---\n\n"
+            f"대상 ID: {user_id_to_unban}\n"
+            f"실행자: {admin_name_display}\n\n"
+        )
+        if success_channels: feedback_text += "✅ 성공:\n" + "\n".join([f"- {name}" for name in success_channels])
+        if failed_channels: feedback_text += "\n\n❌ 실패:\n" + "\n".join([f"- {name}" for name in failed_channels])
 
-# 데이터 로딩 (여기서만 스피너 사용)
-with st.spinner("데이터를 안전하게 불러오는 중입니다..."):
-    nas_top, nas_bot = get_nasdaq_analysis()
-    brief_metrics = get_briefing_metrics()
-    kimp, dom, c_news = get_crypto_safe()
+        # Plain Text로 직접 전송
+        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=feedback_text)
 
-# ----------------------------------------------------------------
-# [1] 국제 증시 (International)
-# ----------------------------------------------------------------
-with st.expander("🌏 국제 증시 (International Indices)", expanded=True):
-    # 아이템 정의
-    intl_items = [
-        ("🪙 비트코인", "BTC-USD"), ("💲 나스닥", "^IXIC"), ("📈 S&P 500", "^GSPC"),
-        ("🏛️ 다우존스", "^DJI"), ("🟡 금", "GC=F"), ("⚪ 은", "SI=F"), ("⚫ 원유", "CL=F")
-    ]
-    
-    # 세션 상태 관리
-    if 'selected_ticker' not in st.session_state: st.session_state['selected_ticker'] = intl_items[0][1]
-    if 'selected_name' not in st.session_state: st.session_state['selected_name'] = intl_items[0][0]
-    
-    # 칩 버튼
-    labels = [i[0] for i in intl_items]
-    current_idx = 0
-    if st.session_state['selected_name'] in labels:
-        current_idx = labels.index(st.session_state['selected_name'])
-        
-    choice = st.radio("차트 선택", labels, horizontal=True, label_visibility="collapsed", index=current_idx)
-    
-    # 선택 변경 처리
-    if choice != st.session_state['selected_name']:
-        st.session_state['selected_name'] = choice
-        for name, ticker in intl_items:
-            if name == choice:
-                st.session_state['selected_ticker'] = ticker
-        st.rerun()
-
-    # 차트
-    render_highchart_safe(st.session_state['selected_ticker'], st.session_state['selected_name'])
-
-    # 리스트 (표) - 안전하게 하나씩
-    table_html = ""
-    for name, ticker in intl_items:
-        p, pct, chg = safe_get_price(ticker)
-        
-        color = "#d60000" if chg >= 0 else "#0051c7"
-        sign = "+" if chg >= 0 else ""
-        bg_cls = "class='selected-row'" if ticker == st.session_state['selected_ticker'] else ""
-        
-        table_html += f"""
-        <tr {bg_cls}>
-            <td style="text-align:left;">{name}</td>
-            <td>{p:,.2f}</td>
-            <td style="color:{color}">{sign}{pct:.2f}%</td>
-            <td style="color:{color}">{sign}{chg:,.2f}</td>
-        </tr>
-        """
-    st.markdown(f"""<table class="custom-table"><thead><tr><th style="text-align:left;">종목</th><th>현재가</th><th>등락률</th><th>등락폭</th></tr></thead><tbody>{table_html}</tbody></table>""", unsafe_allow_html=True)
+    except (ValueError, IndexError): await update.message.reply_text("명령어 형식 오류. 예: `/unban 12345678`")
+    except Exception as e:
+        logger.error(f"/unban 명령어 처리 중 오류: {e}", exc_info=True)
+        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"/unban 명령어 처리 중 오류 발생: {e}") # Plain Text 오류 메시지
 
 
-# ----------------------------------------------------------------
-# [2] 미국 증시 (US Analysis)
-# ----------------------------------------------------------------
-with st.expander("🗽 미국 증시 (US Market Analysis)", expanded=False):
-    st.subheader("🔥 나스닥 100 주도주 & 소외주 (Top 10)")
-    
-    def heat_bar(pct):
-        color = "#d60000" if pct >= 0 else "#0051c7"
-        w = min(abs(pct)*10, 100)
-        return f"<div class='heat-container'><div class='heat-fill' style='width:{w}%; background:{color};'></div></div>"
+# --- 스케줄링 작업 ---
+def get_expired_users_from_db():
+    conn = sqlite3.connect(DB_FILE); cursor = conn.cursor(); expired_users = []
+    try:
+        cursor.execute("SELECT user_id, user_name, channel_id FROM members WHERE kick_timestamp < ?", (int(datetime.now().timestamp()),))
+        expired_users = cursor.fetchall()
+    except Exception as e: logger.error(f"만료된 멤버 조회 중 DB 오류: {e}")
+    finally: conn.close()
+    return expired_users
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("##### 🚀 급등 Top 10")
-        for s in nas_top:
-            st.markdown(f"<div style='margin-bottom:8px; font-size:0.9rem;'><div style='display:flex; justify-content:space-between;'><span><b>{s['ticker']}</b> <span class='theme-tag'>{s['theme']}</span></span><span style='color:#d60000; font-weight:bold;'>+{s['pct']:.2f}%</span></div>{heat_bar(s['pct'])}</div>", unsafe_allow_html=True)
-            
-    with c2:
-        st.markdown("##### 💧 급락 Top 10")
-        for s in nas_bot:
-            st.markdown(f"<div style='margin-bottom:8px; font-size:0.9rem;'><div style='display:flex; justify-content:space-between;'><span><b>{s['ticker']}</b> <span class='theme-tag'>{s['theme']}</span></span><span style='color:#0051c7; font-weight:bold;'>{s['pct']:.2f}%</span></div>{heat_bar(s['pct'])}</div>", unsafe_allow_html=True)
+async def kick_expired_members(application: Application):
+    logger.info("만료된 멤버 확인 작업을 시작합니다...")
+    try: expired_users = await asyncio.to_thread(get_expired_users_from_db)
+    except Exception as e: logger.error(f"get_expired_users_from_db 스레드 실행 중 오류: {e}"); return
 
+    if not expired_users: logger.info("만료된 멤버가 없습니다."); return
+    logger.info(f"{len(expired_users)}명의 만료된 멤버를 처리합니다.")
 
-# ----------------------------------------------------------------
-# [3] 시장 흐름 (Flow) - 브리핑 & 캘린더
-# ----------------------------------------------------------------
-with st.expander("🌊 시장 흐름 (Market Flow)", expanded=True):
-    # 브리핑 로직
-    nas_pct = brief_metrics.get('nas_pct', 0)
-    tnx_val = brief_metrics.get('tnx', 0)
-    vix_val = brief_metrics.get('vix', 0)
-    
-    mood = "강력한 매수세" if nas_pct > 1 else ("약세 흐름" if nas_pct < -0.5 else "혼조세")
-    
-    # HTML 공백 제거 (깨짐 방지)
-    briefing_html = f"""
-    <div class="briefing-card">
-        <div class="briefing-header">☕ 아침 7시 마켓 브리핑</div>
-        <div style="margin-bottom:15px;">
-            <div class="briefing-title">1. 글로벌 매크로 (Overview)</div>
-            <div class="briefing-text">
-                간밤 뉴욕 증시는 <span class="highlight">{mood}</span>를 보였습니다. 
-                나스닥은 <b>{nas_pct:+.2f}%</b>를 기록했으며, 
-                국채 10년물 금리는 {tnx_val:.2f}% 수준을 기록했습니다.
-            </div>
-        </div>
-        <div>
-            <div class="briefing-title">2. 전문가 종합 의견 (Strategy)</div>
-            <div class="briefing-text">
-                공포 지수(VIX)는 <b>{vix_val:.2f}</b>를 기록 중입니다. 
-                {'시장 변동성에 주의가 필요합니다.' if vix_val > 20 else '투자 심리가 비교적 안정적입니다.'}
-            </div>
-        </div>
-    </div>
-    """
-    st.markdown(briefing_html, unsafe_allow_html=True)
-    
-    st.markdown("##### 📅 이번 주 주요 경제 일정 (US)")
-    st.link_button("🔗 실시간 경제 캘린더 확인하기 (Investing.com)", "https://kr.investing.com/economic-calendar/")
+    for user_id, user_name, channel_id in expired_users:
+        channel_name = CHANNELS.get(str(channel_id), {}).get("name", f"ID {channel_id}")
+        user_name_display = user_name if user_name else "정보없음"
+        try:
+            await application.bot.ban_chat_member(chat_id=channel_id, user_id=user_id)
+            logger.info(f"[{channel_name}] 사용자 {user_name_display}({user_id})가 만료되어 추방되었습니다.")
+            kick_notification_text = (
+                f"❌ {channel_name} 멤버십 만료\n\n"
+                f"**대상:** {user_name_display} (`{user_id}`)\n"
+                f"채널에서 자동 추방 처리되었습니다."
+            )
+            await send_admin_message(application, kick_notification_text)
+        except TelegramError as e:
+            if "user not found" in e.message.lower() or "member was not found" in e.message.lower(): logger.warning(f"[{channel_name}] {user_id} 추방 시도, 이미 채널에 없음.")
+            elif "not enough rights" in e.message.lower() or "bot is not a member" in e.message.lower(): logger.error(f"[{channel_name}] 봇 권한 부족 또는 멤버가 아니라서 {user_id} 추방 불가: {e}")
+            else: logger.error(f"[{channel_name}] {user_id} 처리 중 텔레그램 오류: {e}")
+        except Exception as e: logger.error(f"[{channel_name}] {user_id} 처리 중 알 수 없는 오류: {e}", exc_info=True)
+        finally: await asyncio.to_thread(remove_user, user_id, channel_id)
 
+    logger.info("만료된 멤버 확인 작업을 완료했습니다.")
 
-# ----------------------------------------------------------------
-# [4] 암호 화폐 (Crypto)
-# ----------------------------------------------------------------
-with st.expander("🪙 암호 화폐 (Cryptocurrency)", expanded=False):
-    c1, c2 = st.columns(2)
-    c1.metric("김치 프리미엄", f"{kimp:.2f}%")
-    c2.metric("BTC 점유율", f"{dom:.1f}%")
-    
-    st.markdown("---")
-    st.subheader("📰 주요 뉴스 (BlockMedia)")
-    
-    for i in range(0, len(c_news), 2):
-        cols = st.columns(2)
-        for j in range(2):
-            if i+j < len(c_news):
-                e = c_news[i+j]
-                try: 
-                    dt = datetime(*e.published_parsed[:6]) + timedelta(hours=9)
-                    dt_str = dt.strftime("%H:%M")
-                except: dt_str = ""
-                
-                with cols[j]:
-                    st.markdown(f"""
-                    <div style="background:white; padding:15px; border-radius:8px; border:1px solid #eee; height:100%; margin-bottom:10px;">
-                        <a href="{e.link}" target="_blank" style="text-decoration:none; color:#333; font-weight:bold; font-size:0.95rem; display:block; margin-bottom:5px;">{e.title}</a>
-                        <div style="font-size:0.8rem; color:#888;">{dt_str} | BlockMedia</div>
-                    </div>""", unsafe_allow_html=True)
+# --- 메인 실행 함수 ---
+def main() -> None:
+    setup_database()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
+    application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.CHAT_MEMBER))
+    application.add_handler(CommandHandler("set", set_command))
+    application.add_handler(CommandHandler("add", add_command))
+    application.add_handler(CommandHandler("ban", ban_command))
+    application.add_handler(CommandHandler("unban", unban_command))
+    application.add_handler(MessageHandler(filters.Chat(chat_id=ALL_CHANNEL_IDS) & filters.ChatType.CHANNEL, auto_reaction_handler))
 
-# ----------------------------------------------------------------
-# [5] 국내 증시 (Domestic)
-# ----------------------------------------------------------------
-with st.expander("📈 국내 증시 (Domestic Market)", expanded=False):
-    # 각각 안전하게 호출
-    kp_p, kp_pct, kp_chg = safe_get_price("^KS11")
-    kq_p, kq_pct, kq_chg = safe_get_price("^KQ11")
-    krw_p, krw_pct, krw_chg = safe_get_price("KRW=X")
-    
-    m1, m2, m3 = st.columns(3)
-    m1.metric("코스피", f"{kp_p:,.2f}", f"{kp_chg:+.2f}")
-    m2.metric("코스닥", f"{kq_p:,.2f}", f"{kq_chg:+.2f}")
-    m3.metric("원/달러", f"{krw_p:,.2f}", f"{krw_chg:+.2f}")
-    
-    st.markdown("---")
-    render_highchart_safe("^KS11", "KOSPI")
-    st.markdown("<br>", unsafe_allow_html=True)
-    render_highchart_safe("^KQ11", "KOSDAQ")
+    scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
+    scheduler.add_job(kick_expired_members, "interval", hours=1, args=[application])
 
+    async def post_init(app: Application):
+        scheduler.start()
+        logger.info("스케줄러가 시작되었습니다.")
+    application.post_init = post_init
 
-# 하단 배너
-st.markdown("""
-<div class="custom-footer">
-    <div class="footer-content">
-        <div class="footer-main">Financial Report</div>
-        <div class="footer-sub">- by Ajin Partners</div>
-    </div>
-    <a href="tel:010-0000-0000" class="footer-btn">📞 문의하기</a>
-</div>
-""", unsafe_allow_html=True)
+    logger.info("봇이 성공적으로 시작되었습니다. 폴링 대기 중...")
+
+    allowed_updates = [Update.CHAT_MEMBER, Update.MESSAGE, Update.CHANNEL_POST]
+    application.run_polling(allowed_updates=allowed_updates, poll_interval=1.0, timeout=10)
+
+    if scheduler.running: scheduler.shutdown()
+    logger.info("봇이 종료됩니다.")
+
+if __name__ == "__main__":
+    bot_token_placeholder = "봇 토큰"
+    admin_group_placeholder = "YOUR_ADMIN_GROUP_ID_HERE"
+
+    valid_token = TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN.strip() != bot_token_placeholder
+    valid_admin_id = ADMIN_GROUP_ID and ADMIN_GROUP_ID != admin_group_placeholder and ADMIN_GROUP_ID.lstrip('-').isdigit()
+
+    if not valid_token or not valid_admin_id:
+        logger.critical("="*50)
+        if not valid_token: logger.critical(" 오류: TELEGRAM_BOT_TOKEN이 설정되지 않았거나 기본값입니다.")
+        if not valid_admin_id: logger.critical(" 오류: ADMIN_GROUP_ID가 설정되지 않았거나 유효한 ID 형식이 아닙니다 ('-100...' 형태 숫자).")
+        logger.critical(" 코드 상단의 설정값을 실제 값으로 수정해주세요.")
+        logger.critical("="*50)
+    else:
+        try: main()
+        except Exception as e: logger.critical(f"봇 실행 중 최상위 레벨 오류 발생: {e}", exc_info=True)
